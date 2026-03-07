@@ -19,18 +19,16 @@ import (
 )
 
 type NotiInternalServer struct {
-	notiInternal    *notiinternal.NotiInternalServiceClient
+	notiinternal.UnimplementedNotiInternalServiceServer
 	logger          logger.ILogger
 	notificationSvc service.INotificationSvc
 }
 
 func NewNotiInternalServer(
-	notiInternal *notiinternal.NotiInternalServiceClient,
 	logger logger.ILogger,
 	notificationSvc service.INotificationSvc,
 ) *NotiInternalServer {
 	return &NotiInternalServer{
-		notiInternal:    notiInternal,
 		logger:          logger,
 		notificationSvc: notificationSvc,
 	}

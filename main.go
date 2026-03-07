@@ -8,6 +8,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/pkg/database"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	grpcserver "github.com/hiamthach108/dreon-notification/presentation/grpc"
+	"github.com/hiamthach108/dreon-notification/presentation/http"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
@@ -23,6 +24,7 @@ func main() {
 			logger.NewLogger,
 			cache.NewAppCache,
 			database.NewDbClient,
+			http.NewHttpServer,
 
 			// Repositories
 			repository.NewNotificationRepository,
@@ -34,6 +36,7 @@ func main() {
 			grpcserver.NewNotiInternalServer,
 			grpcserver.NewGRPCServer,
 		),
+		fx.Invoke(http.RegisterHooks),
 		fx.Invoke(grpcserver.RegisterHooks),
 	)
 
