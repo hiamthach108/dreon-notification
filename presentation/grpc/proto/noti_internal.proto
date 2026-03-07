@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package dreon.notification.internal.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hiamthach108/dreon-notification/presentation/grpc/gen/proto;notiinternal";
+
+// NotiInternalService exposes internal gRPC RPCs for notification management. Not intended for public consumption.
+service NotiInternalService {
+  // SendNotification sends a notification to a user.
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+}
+
+// SendNotificationRequest mirrors aggregate.SendNotificationReq.
+message SendNotificationRequest {
+  string user_id = 1;
+  string title = 2;
+  string message = 3;
+  string type = 4;
+  string data = 5;
+}
+
+// SendNotificationResponse mirrors aggregate.SendNotificationResp.
+message SendNotificationResponse {
+  string notification_id = 1;
+}
