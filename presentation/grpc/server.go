@@ -6,12 +6,16 @@ import (
 	"time"
 
 	"github.com/hiamthach108/dreon-notification/config"
+	"github.com/hiamthach108/dreon-notification/internal/aggregate"
+	"github.com/hiamthach108/dreon-notification/internal/errorx"
 	"github.com/hiamthach108/dreon-notification/internal/service"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	notiinternal "github.com/hiamthach108/dreon-notification/presentation/grpc/gen/proto"
 	"go.uber.org/fx"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 type NotiInternalServer struct {
@@ -33,9 +37,43 @@ func NewNotiInternalServer(
 }
 
 func (s *NotiInternalServer) SendNotification(ctx context.Context, req *notiinternal.SendNotificationRequest) (*notiinternal.SendNotificationResponse, error) {
-	s.logger.Info("Sending notification", "request", req)
-	s.logger.Debug("Method unimplemented")
-	return nil, nil
+	s.notificationSvc.SendNotification(ctx, &aggregate.SendNotificationReq{
+		IdempotencyKey: req.IdempotencyKey,
+		Source:         req.Source,
+		Channel:        req.Channel,
+		Type:           req.Type,
+		Title:          req.Title,
+		Message:        req.Message,
+		Recipients:     req.Recipients,
+	})
+
+	resp, err := s.notificationSvc.SendNotification(ctx, &aggregate.SendNotificationReq{
+		IdempotencyKey: req.IdempotencyKey,
+		Source:         req.Source,
+		Channel:        req.Channel,
+		Type:           req.Type,
+		Title:          req.Title,
+		Message:        req.Message,
+		Recipients:     req.Recipients,
+	})
+	if err != nil {
+		return nil, errToStatus(err)
+	}
+	return &notiinternal.SendNotificationResponse{
+		NotificationId: resp.NotificationID,
+	}, nil
+}
+
+func errToStatus(err error) error {
+	if err == nil {
+		return nil
+	}
+	code := errorx.GetCode(err)
+	msg := err.Error()
+	switch code {
+	default:
+		return status.Error(codes.Internal, msg)
+	}
 }
 
 // GRPCServer holds the grpc.Server and config for lifecycle management.

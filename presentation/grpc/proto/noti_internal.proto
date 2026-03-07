@@ -14,14 +14,19 @@ service NotiInternalService {
 
 // SendNotificationRequest mirrors aggregate.SendNotificationReq.
 message SendNotificationRequest {
-  string user_id = 1;
-  string title = 2;
-  string message = 3;
+  string idempotencyKey = 1;
+  string source = 2;
+  string channel = 3;
   string type = 4;
-  string data = 5;
+  string title = 5;
+  string message = 6;
+  repeated string recipients = 7;
+  map<string, string> params = 8;
+  google.protobuf.Timestamp scheduledAt = 9;
+  google.protobuf.Timestamp expiredAt = 10;
 }
 
 // SendNotificationResponse mirrors aggregate.SendNotificationResp.
 message SendNotificationResponse {
-  string notification_id = 1;
+  string notificationId = 1;
 }

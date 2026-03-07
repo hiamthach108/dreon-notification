@@ -9,7 +9,7 @@ package notiinternal
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	_ "google.golang.org/protobuf/types/known/timestamppb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -24,14 +24,19 @@ const (
 
 // SendNotificationRequest mirrors aggregate.SendNotificationReq.
 type SendNotificationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
-	Type          string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
-	Data          string                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotencyKey,proto3" json:"idempotencyKey,omitempty"`
+	Source         string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Channel        string                 `protobuf:"bytes,3,opt,name=channel,proto3" json:"channel,omitempty"`
+	Type           string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
+	Title          string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	Message        string                 `protobuf:"bytes,6,opt,name=message,proto3" json:"message,omitempty"`
+	Recipients     []string               `protobuf:"bytes,7,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	Params         map[string]string      `protobuf:"bytes,8,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ScheduledAt    *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=scheduledAt,proto3" json:"scheduledAt,omitempty"`
+	ExpiredAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=expiredAt,proto3" json:"expiredAt,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SendNotificationRequest) Reset() {
@@ -64,9 +69,30 @@ func (*SendNotificationRequest) Descriptor() ([]byte, []int) {
 	return file_proto_noti_internal_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *SendNotificationRequest) GetUserId() string {
+func (x *SendNotificationRequest) GetIdempotencyKey() string {
 	if x != nil {
-		return x.UserId
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *SendNotificationRequest) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *SendNotificationRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *SendNotificationRequest) GetType() string {
+	if x != nil {
+		return x.Type
 	}
 	return ""
 }
@@ -85,24 +111,38 @@ func (x *SendNotificationRequest) GetMessage() string {
 	return ""
 }
 
-func (x *SendNotificationRequest) GetType() string {
+func (x *SendNotificationRequest) GetRecipients() []string {
 	if x != nil {
-		return x.Type
+		return x.Recipients
 	}
-	return ""
+	return nil
 }
 
-func (x *SendNotificationRequest) GetData() string {
+func (x *SendNotificationRequest) GetParams() map[string]string {
 	if x != nil {
-		return x.Data
+		return x.Params
 	}
-	return ""
+	return nil
+}
+
+func (x *SendNotificationRequest) GetScheduledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ScheduledAt
+	}
+	return nil
+}
+
+func (x *SendNotificationRequest) GetExpiredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiredAt
+	}
+	return nil
 }
 
 // SendNotificationResponse mirrors aggregate.SendNotificationResp.
 type SendNotificationResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	NotificationId string                 `protobuf:"bytes,1,opt,name=notification_id,json=notificationId,proto3" json:"notification_id,omitempty"`
+	NotificationId string                 `protobuf:"bytes,1,opt,name=notificationId,proto3" json:"notificationId,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -148,15 +188,26 @@ var File_proto_noti_internal_proto protoreflect.FileDescriptor
 
 const file_proto_noti_internal_proto_rawDesc = "" +
 	"\n" +
-	"\x19proto/noti_internal.proto\x12\x1edreon.notification.internal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8a\x01\n" +
-	"\x17SendNotificationRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\x12\x12\n" +
-	"\x04type\x18\x04 \x01(\tR\x04type\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\tR\x04data\"C\n" +
-	"\x18SendNotificationResponse\x12'\n" +
-	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId2\x9d\x01\n" +
+	"\x19proto/noti_internal.proto\x12\x1edreon.notification.internal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe7\x03\n" +
+	"\x17SendNotificationRequest\x12&\n" +
+	"\x0eidempotencyKey\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x18\n" +
+	"\achannel\x18\x03 \x01(\tR\achannel\x12\x12\n" +
+	"\x04type\x18\x04 \x01(\tR\x04type\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12\x18\n" +
+	"\amessage\x18\x06 \x01(\tR\amessage\x12\x1e\n" +
+	"\n" +
+	"recipients\x18\a \x03(\tR\n" +
+	"recipients\x12[\n" +
+	"\x06params\x18\b \x03(\v2C.dreon.notification.internal.v1.SendNotificationRequest.ParamsEntryR\x06params\x12<\n" +
+	"\vscheduledAt\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vscheduledAt\x128\n" +
+	"\texpiredAt\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiredAt\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"B\n" +
+	"\x18SendNotificationResponse\x12&\n" +
+	"\x0enotificationId\x18\x01 \x01(\tR\x0enotificationId2\x9d\x01\n" +
 	"\x13NotiInternalService\x12\x85\x01\n" +
 	"\x10SendNotification\x127.dreon.notification.internal.v1.SendNotificationRequest\x1a8.dreon.notification.internal.v1.SendNotificationResponseBUZSgithub.com/hiamthach108/dreon-notification/presentation/grpc/gen/proto;notiinternalb\x06proto3"
 
@@ -172,19 +223,24 @@ func file_proto_noti_internal_proto_rawDescGZIP() []byte {
 	return file_proto_noti_internal_proto_rawDescData
 }
 
-var file_proto_noti_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_noti_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_noti_internal_proto_goTypes = []any{
 	(*SendNotificationRequest)(nil),  // 0: dreon.notification.internal.v1.SendNotificationRequest
 	(*SendNotificationResponse)(nil), // 1: dreon.notification.internal.v1.SendNotificationResponse
+	nil,                              // 2: dreon.notification.internal.v1.SendNotificationRequest.ParamsEntry
+	(*timestamppb.Timestamp)(nil),    // 3: google.protobuf.Timestamp
 }
 var file_proto_noti_internal_proto_depIdxs = []int32{
-	0, // 0: dreon.notification.internal.v1.NotiInternalService.SendNotification:input_type -> dreon.notification.internal.v1.SendNotificationRequest
-	1, // 1: dreon.notification.internal.v1.NotiInternalService.SendNotification:output_type -> dreon.notification.internal.v1.SendNotificationResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	2, // 0: dreon.notification.internal.v1.SendNotificationRequest.params:type_name -> dreon.notification.internal.v1.SendNotificationRequest.ParamsEntry
+	3, // 1: dreon.notification.internal.v1.SendNotificationRequest.scheduledAt:type_name -> google.protobuf.Timestamp
+	3, // 2: dreon.notification.internal.v1.SendNotificationRequest.expiredAt:type_name -> google.protobuf.Timestamp
+	0, // 3: dreon.notification.internal.v1.NotiInternalService.SendNotification:input_type -> dreon.notification.internal.v1.SendNotificationRequest
+	1, // 4: dreon.notification.internal.v1.NotiInternalService.SendNotification:output_type -> dreon.notification.internal.v1.SendNotificationResponse
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_noti_internal_proto_init() }
@@ -198,7 +254,7 @@ func file_proto_noti_internal_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_noti_internal_proto_rawDesc), len(file_proto_noti_internal_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
