@@ -35,16 +35,6 @@ func NewNotiInternalServer(
 }
 
 func (s *NotiInternalServer) SendNotification(ctx context.Context, req *notiinternal.SendNotificationRequest) (*notiinternal.SendNotificationResponse, error) {
-	s.notificationSvc.SendNotification(ctx, &aggregate.SendNotificationReq{
-		IdempotencyKey: req.IdempotencyKey,
-		Source:         req.Source,
-		Channel:        req.Channel,
-		Type:           req.Type,
-		Title:          req.Title,
-		Message:        req.Message,
-		Recipients:     req.Recipients,
-	})
-
 	resp, err := s.notificationSvc.SendNotification(ctx, &aggregate.SendNotificationReq{
 		IdempotencyKey: req.IdempotencyKey,
 		Source:         req.Source,
