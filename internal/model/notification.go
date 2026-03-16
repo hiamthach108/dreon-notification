@@ -30,6 +30,7 @@ const (
 	NotificationProviderAwsSes   NotificationProvider = "AWS_SES"
 	NotificationProviderTwilio   NotificationProvider = "TWILIO"
 	NotificationProviderSmtp     NotificationProvider = "SMTP"
+	NotificationProviderResend   NotificationProvider = "RESEND"
 )
 
 type NotificationType string
@@ -61,5 +62,4 @@ type Notification struct {
 	ExpiredAt   time.Time `gorm:"type:timestamp;"`
 	SentAt      time.Time `gorm:"type:timestamp;"`
 	ScheduledAt time.Time `gorm:"type:timestamp;"`
-	
 }

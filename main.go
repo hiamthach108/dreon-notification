@@ -6,6 +6,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/service"
 	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/database"
+	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	grpcserver "github.com/hiamthach108/dreon-notification/presentation/grpc"
 	"github.com/hiamthach108/dreon-notification/presentation/http"
@@ -25,6 +26,14 @@ func main() {
 			cache.NewAppCache,
 			database.NewDbClient,
 			http.NewHttpServer,
+			email.NewResendEmailClient,
+			func(cfg *config.AppConfig) email.IRenderer {
+				dir := cfg.Email.TemplateDir
+				if dir == "" {
+					dir = "templates/emails"
+				}
+				return email.NewRenderer(email.WithTemplateDir(dir))
+			},
 
 			// Repositories
 			repository.NewNotificationRepository,

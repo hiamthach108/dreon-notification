@@ -42,6 +42,12 @@ type AppConfig struct {
 		MaxIdleConns   int    `env:"POSTGRES_MAX_IDLE_CONNS"`
 		MaxOpenConns   int    `env:"POSTGRES_MAX_OPEN_CONNS"`
 	}
+
+	Email struct {
+		Sender       string `env:"EMAIL_SENDER"`
+		TemplateDir  string `env:"EMAIL_TEMPLATE_DIR" default:"templates/email"`
+		ResendAPIKey string `env:"EMAIL_RESEND_API_KEY"`
+	}
 }
 
 func NewAppConfig() (*AppConfig, error) {
