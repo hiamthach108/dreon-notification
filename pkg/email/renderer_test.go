@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +74,9 @@ func TestRenderer_Render_success(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "test.mjml"), []byte(minimalValidMJML), 0644)
 	require.NoError(t, err)
 
-	r := NewRenderer(WithTemplateDir(dir))
+	cfg := &config.AppConfig{}
+	cfg.Email.TemplateDir = dir
+	r := NewRenderer(cfg)
 	ctx := context.Background()
 	params := map[string]any{
 		"Message": "Hello",
@@ -94,7 +97,9 @@ func TestRenderer_Render_escapesParams(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "safe.mjml"), []byte(minimalValidMJML), 0644)
 	require.NoError(t, err)
 
-	r := NewRenderer(WithTemplateDir(dir))
+	cfg := &config.AppConfig{}
+	cfg.Email.TemplateDir = dir
+	r := NewRenderer(cfg)
 	ctx := context.Background()
 	params := map[string]any{
 		"Message": "Say <hello>",
@@ -112,8 +117,9 @@ func TestRenderer_Render_escapesParams(t *testing.T) {
 }
 
 func TestRenderer_Render_missingTemplate(t *testing.T) {
-	dir := t.TempDir()
-	r := NewRenderer(WithTemplateDir(dir))
+	cfg := &config.AppConfig{}
+	cfg.Email.TemplateDir = t.TempDir()
+	r := NewRenderer(cfg)
 	ctx := context.Background()
 
 	_, err := r.Render(ctx, "nonexistent", nil)
@@ -128,20 +134,12 @@ func TestRenderer_Render_invalidMJML(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "bad.mjml"), []byte("<mjml><mj-body><mj-section>"), 0644)
 	require.NoError(t, err)
 
-	r := NewRenderer(WithTemplateDir(dir))
+	cfg := &config.AppConfig{}
+	cfg.Email.TemplateDir = dir
+	r := NewRenderer(cfg)
 	ctx := context.Background()
 
 	_, err = r.Render(ctx, "bad", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mjml render")
-}
-
-func TestNewRenderer_defaultDir(t *testing.T) {
-	r := NewRenderer()
-	assert.Equal(t, "templates/emails", r.templateDir)
-}
-
-func TestNewRenderer_withTemplateDir(t *testing.T) {
-	r := NewRenderer(WithTemplateDir("/custom/path"))
-	assert.Equal(t, "/custom/path", r.templateDir)
 }

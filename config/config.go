@@ -48,6 +48,13 @@ type AppConfig struct {
 		TemplateDir  string `env:"EMAIL_TEMPLATE_DIR" default:"templates/email"`
 		ResendAPIKey string `env:"EMAIL_RESEND_API_KEY"`
 	}
+
+	SMS struct {
+		TwilioAccountSID string `env:"TWILIO_ACCOUNT_SID"`
+		TwilioAuthToken  string `env:"TWILIO_AUTH_TOKEN"`
+		TwilioFromNumber string `env:"TWILIO_FROM_NUMBER"` // E.164, e.g. +15551234567
+		SMSTemplateDir   string `env:"SMS_TEMPLATE_DIR" default:"templates/sms"`
+	}
 }
 
 func NewAppConfig() (*AppConfig, error) {

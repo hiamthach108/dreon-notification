@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/preslavrachev/gomjml/mjml"
 )
 
@@ -38,28 +39,18 @@ type IRenderer interface {
 	Render(ctx context.Context, templateName string, params map[string]any) (html string, err error)
 }
 
-// RendererOption configures the template renderer.
-type RendererOption func(*Renderer)
-
-// WithTemplateDir sets the directory containing .mjml files.
-func WithTemplateDir(dir string) RendererOption {
-	return func(r *Renderer) { r.templateDir = dir }
-}
-
 // Renderer loads MJML templates, executes Go template with params, and compiles to HTML.
 type Renderer struct {
 	templateDir string
 }
 
-// NewRenderer returns a renderer that reads MJML from templateDir.
-func NewRenderer(opts ...RendererOption) *Renderer {
-	r := &Renderer{
-		templateDir: "templates/emails",
+// NewRenderer returns a renderer that reads MJML from cfg.Email.TemplateDir (default: templates/emails).
+func NewRenderer(cfg *config.AppConfig) IRenderer {
+	dir := cfg.Email.TemplateDir
+	if dir == "" {
+		dir = "templates/emails"
 	}
-	for _, o := range opts {
-		o(r)
-	}
-	return r
+	return &Renderer{templateDir: dir}
 }
 
 // Render implements IRenderer.
@@ -90,5 +81,3 @@ func (r *Renderer) Render(ctx context.Context, templateName string, params map[s
 
 	return html, nil
 }
-
-var _ IRenderer = (*Renderer)(nil)

@@ -12,6 +12,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/repository"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +76,7 @@ func TestNotificationSvc_SendEmail_Welcome(t *testing.T) {
 	appLogger, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
 
-	renderer := email.NewRenderer(email.WithTemplateDir(cfg.Email.TemplateDir))
+	renderer := email.NewRenderer(cfg)
 	mockClient := &mockEmailClient{}
 
 	svc := NewNotificationSvc(
@@ -83,6 +84,8 @@ func TestNotificationSvc_SendEmail_Welcome(t *testing.T) {
 		&mockNotificationRepo{},
 		mockClient,
 		renderer,
+		sms.NewMockClient(),
+		nil,
 		cfg,
 	)
 
@@ -118,7 +121,7 @@ func TestNotificationSvc_SendEmail_UnsupportedType(t *testing.T) {
 	appLogger, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
 
-	renderer := email.NewRenderer(email.WithTemplateDir(cfg.Email.TemplateDir))
+	renderer := email.NewRenderer(cfg)
 	mockClient := &mockEmailClient{}
 
 	svc := NewNotificationSvc(
@@ -126,6 +129,8 @@ func TestNotificationSvc_SendEmail_UnsupportedType(t *testing.T) {
 		&mockNotificationRepo{},
 		mockClient,
 		renderer,
+		sms.NewMockClient(),
+		nil,
 		cfg,
 	)
 
@@ -152,19 +157,23 @@ func TestNotificationSvc_SendNotification_ChannelSwitch(t *testing.T) {
 		appLogger,
 		&mockNotificationRepo{},
 		&mockEmailClient{},
-		email.NewRenderer(email.WithTemplateDir(cfg.Email.TemplateDir)),
+		email.NewRenderer(cfg),
+		sms.NewMockClient(),
+		nil,
 		cfg,
 	)
 
-	t.Run("SMS not implemented", func(t *testing.T) {
+	t.Run("SMS returns error when client not configured", func(t *testing.T) {
 		_, err := svc.SendNotification(ctx, &aggregate.SendNotificationReq{
 			Channel:    string(model.NotificationChannelSms),
 			Type:       string(model.NotificationTypeVerifyOTP),
 			Title:      "OTP",
+			Message:    "Your code is 123456",
 			Recipients: []string{"+1234567890"},
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not implemented")
+		// MockClient returns "not configured" when SendSMS is called
+		assert.Contains(t, err.Error(), "not configured")
 	})
 
 	t.Run("PUSH not implemented", func(t *testing.T) {

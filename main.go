@@ -8,6 +8,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/pkg/database"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	grpcserver "github.com/hiamthach108/dreon-notification/presentation/grpc"
 	"github.com/hiamthach108/dreon-notification/presentation/http"
 	"go.uber.org/fx"
@@ -27,13 +28,9 @@ func main() {
 			database.NewDbClient,
 			http.NewHttpServer,
 			email.NewResendEmailClient,
-			func(cfg *config.AppConfig) email.IRenderer {
-				dir := cfg.Email.TemplateDir
-				if dir == "" {
-					dir = "templates/emails"
-				}
-				return email.NewRenderer(email.WithTemplateDir(dir))
-			},
+			email.NewRenderer,
+			sms.NewMockClient, // TODO: remove this and use NewTwilioClient when Twilio is configured
+			sms.NewBodyRenderer,
 
 			// Repositories
 			repository.NewNotificationRepository,

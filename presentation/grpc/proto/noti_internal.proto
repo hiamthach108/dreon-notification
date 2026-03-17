@@ -3,6 +3,7 @@ syntax = "proto3";
 package dreon.notification.internal.v1;
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/hiamthach108/dreon-notification/presentation/grpc/gen/proto;notiinternal";
 
@@ -21,7 +22,7 @@ message SendNotificationRequest {
   string title = 5;
   string message = 6;
   repeated string recipients = 7;
-  map<string, string> params = 8;
+  google.protobuf.Struct params = 8;
   google.protobuf.Timestamp scheduledAt = 9;
   google.protobuf.Timestamp expiredAt = 10;
 }

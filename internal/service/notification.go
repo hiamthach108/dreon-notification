@@ -9,28 +9,24 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/errorx"
 	"github.com/hiamthach108/dreon-notification/internal/model"
 	"github.com/hiamthach108/dreon-notification/internal/repository"
+	"github.com/hiamthach108/dreon-notification/internal/shared/constant"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-notification/pkg/sms"
 )
-
-// emailTemplateMap maps notification type to MJML template name (without .mjml) for EMAIL channel.
-var emailTemplateMap = map[string]string{
-	string(model.NotificationTypeWelcome):        "welcome",
-	string(model.NotificationTypeVerifyOTP):      "verify-otp",
-	string(model.NotificationTypeForgotPassword): "forgot-password",
-	string(model.NotificationTypeResetPassword):  "reset-password",
-}
 
 type INotificationSvc interface {
 	SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error)
 }
 
 type NotificationSvc struct {
-	logger      logger.ILogger
-	repo        repository.INotificationRepository
-	emailClient email.IEmailClient
-	renderer    email.IRenderer
-	fromEmail   string
+	logger        logger.ILogger
+	repo          repository.INotificationRepository
+	emailClient   email.IEmailClient
+	renderer      email.IRenderer
+	fromEmail     string
+	smsClient     sms.ISMSClient
+	smsBodyRender sms.IBodyRenderer
 }
 
 // NewNotificationSvc builds the notification service. Sender for EMAIL channel is read from cfg.Email.Sender.
@@ -39,14 +35,18 @@ func NewNotificationSvc(
 	repo repository.INotificationRepository,
 	emailClient email.IEmailClient,
 	renderer email.IRenderer,
+	smsClient sms.ISMSClient,
+	smsBodyRender sms.IBodyRenderer,
 	cfg *config.AppConfig,
 ) INotificationSvc {
 	return &NotificationSvc{
-		logger:      logger,
-		repo:        repo,
-		emailClient: emailClient,
-		renderer:    renderer,
-		fromEmail:   cfg.Email.Sender,
+		logger:        logger,
+		repo:          repo,
+		emailClient:   emailClient,
+		renderer:      renderer,
+		fromEmail:     cfg.Email.Sender,
+		smsClient:     smsClient,
+		smsBodyRender: smsBodyRender,
 	}
 }
 
@@ -66,7 +66,7 @@ func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.S
 }
 
 func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
-	templateName, ok := emailTemplateMap[req.Type]
+	templateName, ok := constant.EmailTemplateMap[req.Type]
 	if !ok {
 		return nil, errorx.New(errorx.ErrInternal, fmt.Sprintf("no email template for type: %s", req.Type))
 	}
@@ -93,7 +93,34 @@ func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNoti
 }
 
 func (s *NotificationSvc) sendSMS(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
-	return nil, errorx.New(errorx.ErrInternal, "SMS channel not implemented")
+	if s.smsClient == nil {
+		return nil, errorx.New(errorx.ErrInternal, "SMS client not configured")
+	}
+	params := req.Params
+	if params == nil {
+		params = make(map[string]any)
+	}
+	var body string
+	if templateName, ok := constant.SMSTemplateMap[req.Type]; ok && s.smsBodyRender != nil {
+		var err error
+		body, err = s.smsBodyRender.RenderBody(ctx, templateName, params)
+		if err != nil {
+			return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("render sms template: %w", err))
+		}
+	} else {
+		body = req.Message
+	}
+	if body == "" {
+		return nil, errorx.New(errorx.ErrInternal, "SMS body is empty")
+	}
+	data := &sms.SMSData{
+		To:   req.Recipients,
+		Body: body,
+	}
+	if err := s.smsClient.SendSMS(ctx, data); err != nil {
+		return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send sms: %w", err))
+	}
+	return &aggregate.SendNotificationResp{NotificationID: ""}, nil
 }
 
 func (s *NotificationSvc) sendPush(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {

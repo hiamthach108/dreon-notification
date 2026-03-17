@@ -43,6 +43,7 @@ func (s *NotiInternalServer) SendNotification(ctx context.Context, req *notiinte
 		Title:          req.Title,
 		Message:        req.Message,
 		Recipients:     req.Recipients,
+		Params:         req.Params.AsMap(),
 	})
 	if err != nil {
 		return nil, errToStatus(err)

@@ -9,6 +9,7 @@ package notiinternal
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -32,7 +33,7 @@ type SendNotificationRequest struct {
 	Title          string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
 	Message        string                 `protobuf:"bytes,6,opt,name=message,proto3" json:"message,omitempty"`
 	Recipients     []string               `protobuf:"bytes,7,rep,name=recipients,proto3" json:"recipients,omitempty"`
-	Params         map[string]string      `protobuf:"bytes,8,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Params         *structpb.Struct       `protobuf:"bytes,8,opt,name=params,proto3" json:"params,omitempty"`
 	ScheduledAt    *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=scheduledAt,proto3" json:"scheduledAt,omitempty"`
 	ExpiredAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=expiredAt,proto3" json:"expiredAt,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -118,7 +119,7 @@ func (x *SendNotificationRequest) GetRecipients() []string {
 	return nil
 }
 
-func (x *SendNotificationRequest) GetParams() map[string]string {
+func (x *SendNotificationRequest) GetParams() *structpb.Struct {
 	if x != nil {
 		return x.Params
 	}
@@ -188,7 +189,7 @@ var File_proto_noti_internal_proto protoreflect.FileDescriptor
 
 const file_proto_noti_internal_proto_rawDesc = "" +
 	"\n" +
-	"\x19proto/noti_internal.proto\x12\x1edreon.notification.internal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe7\x03\n" +
+	"\x19proto/noti_internal.proto\x12\x1edreon.notification.internal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x80\x03\n" +
 	"\x17SendNotificationRequest\x12&\n" +
 	"\x0eidempotencyKey\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12\x18\n" +
@@ -198,14 +199,11 @@ const file_proto_noti_internal_proto_rawDesc = "" +
 	"\amessage\x18\x06 \x01(\tR\amessage\x12\x1e\n" +
 	"\n" +
 	"recipients\x18\a \x03(\tR\n" +
-	"recipients\x12[\n" +
-	"\x06params\x18\b \x03(\v2C.dreon.notification.internal.v1.SendNotificationRequest.ParamsEntryR\x06params\x12<\n" +
+	"recipients\x12/\n" +
+	"\x06params\x18\b \x01(\v2\x17.google.protobuf.StructR\x06params\x12<\n" +
 	"\vscheduledAt\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vscheduledAt\x128\n" +
 	"\texpiredAt\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiredAt\x1a9\n" +
-	"\vParamsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"B\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiredAt\"B\n" +
 	"\x18SendNotificationResponse\x12&\n" +
 	"\x0enotificationId\x18\x01 \x01(\tR\x0enotificationId2\x9d\x01\n" +
 	"\x13NotiInternalService\x12\x85\x01\n" +
@@ -223,15 +221,15 @@ func file_proto_noti_internal_proto_rawDescGZIP() []byte {
 	return file_proto_noti_internal_proto_rawDescData
 }
 
-var file_proto_noti_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_noti_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_noti_internal_proto_goTypes = []any{
 	(*SendNotificationRequest)(nil),  // 0: dreon.notification.internal.v1.SendNotificationRequest
 	(*SendNotificationResponse)(nil), // 1: dreon.notification.internal.v1.SendNotificationResponse
-	nil,                              // 2: dreon.notification.internal.v1.SendNotificationRequest.ParamsEntry
+	(*structpb.Struct)(nil),          // 2: google.protobuf.Struct
 	(*timestamppb.Timestamp)(nil),    // 3: google.protobuf.Timestamp
 }
 var file_proto_noti_internal_proto_depIdxs = []int32{
-	2, // 0: dreon.notification.internal.v1.SendNotificationRequest.params:type_name -> dreon.notification.internal.v1.SendNotificationRequest.ParamsEntry
+	2, // 0: dreon.notification.internal.v1.SendNotificationRequest.params:type_name -> google.protobuf.Struct
 	3, // 1: dreon.notification.internal.v1.SendNotificationRequest.scheduledAt:type_name -> google.protobuf.Timestamp
 	3, // 2: dreon.notification.internal.v1.SendNotificationRequest.expiredAt:type_name -> google.protobuf.Timestamp
 	0, // 3: dreon.notification.internal.v1.NotiInternalService.SendNotification:input_type -> dreon.notification.internal.v1.SendNotificationRequest
@@ -254,7 +252,7 @@ func file_proto_noti_internal_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_noti_internal_proto_rawDesc), len(file_proto_noti_internal_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
