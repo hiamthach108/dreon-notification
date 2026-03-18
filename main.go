@@ -37,7 +37,6 @@ func main() {
 			events.NewLoggerAdapter,
 			events.NewAMQPPublisher,
 			events.NewAMQPSubscriber,
-			events.NewEventsRouter,
 
 			// Repositories
 			repository.NewNotificationRepository,
@@ -51,7 +50,7 @@ func main() {
 		),
 		fx.Invoke(http.RegisterHooks),
 		fx.Invoke(grpcserver.RegisterHooks),
-		fx.Invoke(events.RunRouter),
+		fx.Invoke(events.RunConsumers),
 	)
 
 	app.Run()

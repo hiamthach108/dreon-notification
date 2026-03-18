@@ -5,7 +5,6 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-amqp/v3/pkg/amqp"
-	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/hiamthach108/dreon-notification/config"
 )
 
@@ -32,9 +31,4 @@ func NewAMQPSubscriber(cfg *config.AppConfig, log watermill.LoggerAdapter) (*amq
 		return nil, err
 	}
 	return amqp.NewSubscriber(ac, log)
-}
-
-// NewEventsRouter creates an empty Watermill router. Topic subscriptions are registered in RunRouter.
-func NewEventsRouter(log watermill.LoggerAdapter) (*message.Router, error) {
-	return message.NewRouter(message.RouterConfig{}, log)
 }
