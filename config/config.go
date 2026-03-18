@@ -55,6 +55,10 @@ type AppConfig struct {
 		TwilioFromNumber string `env:"TWILIO_FROM_NUMBER"` // E.164, e.g. +15551234567
 		SMSTemplateDir   string `env:"SMS_TEMPLATE_DIR" default:"templates/sms"`
 	}
+
+	RabbitMQ struct {
+		URL string `env:"RABBITMQ_URL"`
+	}
 }
 
 func NewAppConfig() (*AppConfig, error) {

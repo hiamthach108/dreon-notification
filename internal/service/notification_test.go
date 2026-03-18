@@ -82,6 +82,7 @@ func TestNotificationSvc_SendEmail_Welcome(t *testing.T) {
 	svc := NewNotificationSvc(
 		appLogger,
 		&mockNotificationRepo{},
+		nil, // publisher not needed for SendNotification tests
 		mockClient,
 		renderer,
 		sms.NewMockClient(),
@@ -127,6 +128,7 @@ func TestNotificationSvc_SendEmail_UnsupportedType(t *testing.T) {
 	svc := NewNotificationSvc(
 		appLogger,
 		&mockNotificationRepo{},
+		nil, // publisher not needed for SendNotification tests
 		mockClient,
 		renderer,
 		sms.NewMockClient(),
@@ -156,6 +158,7 @@ func TestNotificationSvc_SendNotification_ChannelSwitch(t *testing.T) {
 	svc := NewNotificationSvc(
 		appLogger,
 		&mockNotificationRepo{},
+		nil, // publisher not needed for SendNotification tests
 		&mockEmailClient{},
 		email.NewRenderer(cfg),
 		sms.NewMockClient(),

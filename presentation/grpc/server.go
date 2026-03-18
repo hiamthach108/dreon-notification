@@ -35,7 +35,11 @@ func NewNotiInternalServer(
 }
 
 func (s *NotiInternalServer) SendNotification(ctx context.Context, req *notiinternal.SendNotificationRequest) (*notiinternal.SendNotificationResponse, error) {
-	resp, err := s.notificationSvc.SendNotification(ctx, &aggregate.SendNotificationReq{
+	var params map[string]any
+	if req.Params != nil {
+		params = req.Params.AsMap()
+	}
+	aggReq := &aggregate.SendNotificationReq{
 		IdempotencyKey: req.IdempotencyKey,
 		Source:         req.Source,
 		Channel:        req.Channel,
@@ -43,13 +47,22 @@ func (s *NotiInternalServer) SendNotification(ctx context.Context, req *notiinte
 		Title:          req.Title,
 		Message:        req.Message,
 		Recipients:     req.Recipients,
-		Params:         req.Params.AsMap(),
-	})
+		Params:         params,
+	}
+	if req.ScheduledAt != nil {
+		t := req.ScheduledAt.AsTime()
+		aggReq.ScheduledAt = &t
+	}
+	if req.ExpiredAt != nil {
+		t := req.ExpiredAt.AsTime()
+		aggReq.ExpiredAt = &t
+	}
+	notificationID, err := s.notificationSvc.EnqueueNotification(ctx, aggReq)
 	if err != nil {
 		return nil, errToStatus(err)
 	}
 	return &notiinternal.SendNotificationResponse{
-		NotificationId: resp.NotificationID,
+		NotificationId: notificationID,
 	}, nil
 }
 
@@ -60,6 +73,8 @@ func errToStatus(err error) error {
 	code := errorx.GetCode(err)
 	msg := err.Error()
 	switch code {
+	case errorx.ErrBadRequest:
+		return status.Error(codes.InvalidArgument, msg)
 	default:
 		return status.Error(codes.Internal, msg)
 	}

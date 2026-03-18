@@ -1,99 +1,110 @@
 # dreon-notification
 
-Notification service that sends emails (Resend) and SMS (Twilio) via gRPC. Supports template-based messages for channels EMAIL and SMS.
+Notification service (MVP): send emails (Resend) and SMS (Twilio) via gRPC, with async processing over RabbitMQ.
 
 ## Features
 
-- **Email** – MJML templates (welcome, verify-otp, forgot-password, reset-password) rendered to HTML and sent via [Resend](https://resend.com).
-- **SMS** – Text templates (e.g. verify-otp) sent via [Twilio](https://www.twilio.com). Uses a mock client when Twilio is not configured.
-- **gRPC API** – `SendNotification` with channel (EMAIL, SMS, PUSH, IN_APP), type, recipients, and params.
-- **HTTP** – Health or admin endpoints (if configured).
+- **gRPC API** – Create/send notifications; enqueue for async send. Channel: EMAIL, SMS (PUSH/IN_APP stubbed).
+- **Async queue** – Enqueue notification → RabbitMQ (Watermill/AMQP) → consumer processes and sends. Messages are always committed (ack); failed sends are marked `Failed` in DB for later handling/retry.
+- **Email** – MJML templates (welcome, verify-otp, forgot-password, reset-password) via [Resend](https://resend.com).
+- **SMS** – Text templates via [Twilio](https://www.twilio.com); mock client when Twilio is not configured.
+- **HTTP** – Health/admin endpoints.
 
 ## Prerequisites
 
 - Go 1.25+
-- Redis (for cache)
-- PostgreSQL (for notification records)
-- Resend API key (for email)
-- Twilio account (optional; for SMS)
+- Redis (cache)
+- PostgreSQL (notification records)
+- RabbitMQ (queue; e.g. `docker-compose up -d rabbitmq`)
+- Resend API key (email)
+- Twilio (optional; for SMS)
 
 ## Setup
 
-1. Clone and install dependencies:
+1. Install dependencies:
 
 ```bash
 go mod download
 ```
 
-2. Copy env example and set values:
+2. Copy env and set values:
 
 ```bash
 cp .env.example .env
-# Edit .env with your Redis, Postgres, Resend, and optionally Twilio credentials.
+# Set Redis, Postgres, RabbitMQ, Resend; optionally Twilio.
 ```
 
-3. Run:
+3. Start RabbitMQ (if using Docker):
+
+```bash
+docker-compose up -d rabbitmq
+```
+
+Use `RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/` in `.env` when running the app on your host (avoids IPv6 connection issues).
+
+4. Run the app:
 
 ```bash
 go run .
 ```
 
-- HTTP server: `http://localhost:8080` (see `HTTP_HOST`, `HTTP_PORT`)
-- gRPC server: `localhost:9090` (see `GRPC_PORT`)
+- HTTP: `http://localhost:8080` (`HTTP_HOST`, `HTTP_PORT`)
+- gRPC: `localhost:9090` (`GRPC_PORT`)
 
 ## Environment Variables
 
-| Group      | Variable                    | Description |
-|-----------|-----------------------------|-------------|
-| App       | `APP_NAME`, `APP_VERSION`  | Application identity |
-| Server    | `HTTP_HOST`, `HTTP_PORT`, `GRPC_PORT` | Listen addresses |
-| Redis     | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Cache |
-| Postgres  | `POSTGRES_*`               | Database connection |
-| Email     | `EMAIL_SENDER`             | From address (Resend verified domain or onboarding@resend.dev) |
-| Email     | `EMAIL_TEMPLATE_DIR`       | MJML template directory (default: `templates/email`) |
-| Email     | `EMAIL_RESEND_API_KEY`     | Resend API key |
-| SMS       | `TWILIO_ACCOUNT_SID`       | Twilio Account SID (optional) |
-| SMS       | `TWILIO_AUTH_TOKEN`        | Twilio Auth Token (optional) |
-| SMS       | `TWILIO_FROM_NUMBER`       | Twilio sender number, E.164 (e.g. +15551234567) (optional) |
-| SMS       | `SMS_TEMPLATE_DIR`         | SMS text template directory (default: `templates/sms`) |
-| Logging   | `LOG_LEVEL`                | Log level (e.g. info, debug) |
+| Group     | Variable                         | Description |
+|----------|----------------------------------|-------------|
+| App      | `APP_NAME`, `APP_VERSION`       | Application identity |
+| Server   | `HTTP_HOST`, `HTTP_PORT`, `GRPC_PORT` | Listen addresses |
+| Redis    | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Cache |
+| Postgres | `POSTGRES_*`                     | Database connection |
+| RabbitMQ | `RABBITMQ_URL`                   | AMQP URL. Use `127.0.0.1` on host; `rabbitmq` in Docker. |
+| Email    | `EMAIL_SENDER`, `EMAIL_RESEND_API_KEY`, `EMAIL_TEMPLATE_DIR` | Resend |
+| SMS      | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `SMS_TEMPLATE_DIR` | Twilio (optional) |
+| Logging  | `LOG_LEVEL`                      | e.g. info, debug |
 
-If `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are not set, the service uses a mock SMS client; SMS send requests will fail with "client not configured".
+If Twilio is not set, a mock SMS client is used.
 
 ## Project Structure
 
 ```
 .
-├── config/                 # App config and env loading
+├── config/                    # App config, env loading
 ├── internal/
-│   ├── aggregate/          # Request/response DTOs
-│   ├── model/              # Domain models
-│   ├── repository/         # Data access
-│   ├── service/            # Notification business logic
-│   ├── shared/constant/    # Template maps (email, SMS)
-│   └── errorx/             # Error types
+│   ├── aggregate/             # DTOs (e.g. SendNotificationReq, enqueue payload)
+│   ├── model/                 # Domain models
+│   ├── repository/            # Data access
+│   ├── service/               # Notification logic; publish/subscribe (AMQP) in service layer
+│   ├── shared/constant/       # Template maps, event topics
+│   └── errorx/                # Error types
 ├── pkg/
-│   ├── email/              # Email client (Resend), MJML renderer
-│   ├── sms/                # SMS client (Twilio), body renderer, mock
-│   ├── logger/             # Logger interface and impl
-│   ├── cache/              # Redis cache
-│   ├── database/           # Postgres client
-│   └── validator/          # Validation
+│   ├── email/                 # Resend client, MJML renderer
+│   ├── sms/                   # Twilio + mock, body renderer
+│   ├── logger/                # Logger (Zap)
+│   ├── cache/                 # Redis
+│   ├── database/              # Postgres
+│   └── validator/
 ├── presentation/
-│   ├── grpc/               # gRPC server and proto
-│   └── http/               # HTTP server
+│   ├── events/                # AMQP: LoggerAdapter, publisher/subscriber from config, router, RunRouter (topic subscriptions)
+│   ├── grpc/                  # gRPC server, NotiInternal
+│   └── http/                  # HTTP server
 ├── templates/
-│   ├── email/              # MJML templates (.mjml)
-│   └── sms/                # SMS text templates (.txt)
-└── examples/               # Example scripts (e.g. send email)
+│   ├── email/                 # MJML (.mjml)
+│   └── sms/                   # Text (.txt)
+└── examples/
 ```
+
+## Queue Behavior (MVP)
+
+- **Topic**: `notifications.send` (see `internal/shared/constant/event.go`).
+- **Publish**: Service enqueues by publishing to AMQP; consumer runs in the same process (Watermill router).
+- **Consume**: One subscriber; `RunRouter` registers topic → handler (service `ProcessNotificationMessage`). Messages are **always acked** (autocommit). On send failure, notification status is set to `Failed` and the message is still acked so the queue keeps moving; failed notifications can be retried or handled later via DB.
 
 ## Notification Types and Templates
 
-- **EMAIL**: `WELCOME`, `VERIFY_OTP`, `FORGOT_PASSWORD`, `RESET_PASSWORD` → MJML templates in `templates/email/`.
-- **SMS**: `VERIFY_OTP` (and others as added) → text templates in `templates/sms/`.
-
-Template name mapping is in `internal/shared/constant/template.go`.
+- **EMAIL**: `WELCOME`, `VERIFY_OTP`, `FORGOT_PASSWORD`, `RESET_PASSWORD` → `templates/email/` (MJML).
+- **SMS**: e.g. `VERIFY_OTP` → `templates/sms/` (text). Mapping in `internal/shared/constant/template.go`.
 
 ## Testing
 
