@@ -21,6 +21,7 @@ func RunConsumers(lc fx.Lifecycle, subscriber *amqp.Subscriber, service service.
 	}
 	// Register consumer handler for the notification send topic
 	router.AddConsumerHandler("notification_send_handler", constant.EventTopicNotificationsSend, subscriber, service.ProcessNotificationFromQueue)
+	router.AddConsumerHandler("notification_retry_handler", constant.EventTopicNotificationsRetry, subscriber, service.ProcessNotificationRetryFromQueue)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

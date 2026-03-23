@@ -62,4 +62,10 @@ type Notification struct {
 	ExpiredAt   time.Time `gorm:"type:timestamp;"`
 	SentAt      time.Time `gorm:"type:timestamp;"`
 	ScheduledAt time.Time `gorm:"type:timestamp;"`
+
+	AttemptCount int `gorm:"type:int;not null;default:0"`
+	MaxAttempts  int `gorm:"type:int;not null;default:3"`
+
+	// NextRetryAt is when the row may be scheduled for retry again (NULL = eligible for first scheduling after failure).
+	NextRetryAt *time.Time `gorm:"type:timestamp;index"`
 }

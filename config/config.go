@@ -43,6 +43,15 @@ type AppConfig struct {
 		MaxOpenConns   int    `env:"POSTGRES_MAX_OPEN_CONNS"`
 	}
 
+	Notification struct {
+		MaxAttempts              int `env:"NOTIFICATION_MAX_ATTEMPTS" default:"3"`
+		RetryIntervalSec         int `env:"NOTIFICATION_RETRY_INTERVAL_SEC"`
+		RetryBatchSize           int `env:"NOTIFICATION_RETRY_BATCH_SIZE"`
+		RetryBackoffInitialSec   int `env:"NOTIFICATION_RETRY_BACKOFF_INITIAL_SEC"`
+		RetryBackoffMaxSec       int `env:"NOTIFICATION_RETRY_BACKOFF_MAX_SEC"`
+		RetryPublishLeaseSec     int `env:"NOTIFICATION_RETRY_PUBLISH_LEASE_SEC"`
+	}
+
 	Email struct {
 		Sender       string `env:"EMAIL_SENDER"`
 		TemplateDir  string `env:"EMAIL_TEMPLATE_DIR" default:"templates/email"`

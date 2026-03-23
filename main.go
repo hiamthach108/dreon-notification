@@ -10,6 +10,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	"github.com/hiamthach108/dreon-notification/presentation/events"
+	"github.com/hiamthach108/dreon-notification/presentation/worker"
 	grpcserver "github.com/hiamthach108/dreon-notification/presentation/grpc"
 	"github.com/hiamthach108/dreon-notification/presentation/http"
 	"go.uber.org/fx"
@@ -51,6 +52,7 @@ func main() {
 		fx.Invoke(http.RegisterHooks),
 		fx.Invoke(grpcserver.RegisterHooks),
 		fx.Invoke(events.RunConsumers),
+		fx.Invoke(worker.RunPendingRetryWorker),
 	)
 
 	app.Run()

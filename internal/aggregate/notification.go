@@ -27,8 +27,13 @@ type SendNotificationResp struct {
 // NotificationEnqueuePayload is the message payload published to the notifications queue.
 // Used by the service when publishing and by the consumer when unmarshalling.
 type NotificationEnqueuePayload struct {
-	NotificationID string             `json:"notificationId"`
+	NotificationID string              `json:"notificationId"`
 	Req            SendNotificationReq `json:"req"`
+}
+
+// NotificationRetryPayload is published to the retry topic; the consumer loads the row from the DB.
+type NotificationRetryPayload struct {
+	NotificationID string `json:"notificationId"`
 }
 
 type NotificationAggregate struct {
