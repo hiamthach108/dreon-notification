@@ -86,6 +86,40 @@ func (c *firebaseClient) SendToTokens(ctx context.Context, tokens []string, msg 
 	return &outcome, nil
 }
 
+func (c *firebaseClient) SendToTopics(ctx context.Context, topics []string, msg *PushMessage) (*SendOutcome, error) {
+	filtered := filterNonEmptyTopics(topics)
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("fcm: %w", ErrNoTopics)
+	}
+	if err := validatePushMessage(msg); err != nil {
+		return nil, err
+	}
+
+	var outcome SendOutcome
+	for _, topic := range filtered {
+		tm := toTopicMessage(topic, msg)
+		_, err := c.messaging.Send(ctx, tm)
+		if err != nil {
+			outcome.FailureCount++
+			c.logger.Warn("FCM topic send failed", "topic", topic, "error", err)
+			continue
+		}
+		outcome.SuccessCount++
+		c.logger.Info("FCM topic sent", "topic", topic)
+	}
+
+	if outcome.SuccessCount == 0 {
+		return &outcome, fmt.Errorf("fcm: no topics were successfully sent")
+	}
+	if outcome.FailureCount > 0 {
+		c.logger.Warn("FCM topic partial failure",
+			"success", outcome.SuccessCount,
+			"failure", outcome.FailureCount,
+		)
+	}
+	return &outcome, nil
+}
+
 func validatePushMessage(msg *PushMessage) error {
 	if msg == nil {
 		return fmt.Errorf("fcm: message is nil")
@@ -109,6 +143,31 @@ func toMulticastMessage(tokens []string, msg *PushMessage) *messaging.MulticastM
 		}
 	}
 	return mm
+}
+
+func toTopicMessage(topic string, msg *PushMessage) *messaging.Message {
+	m := &messaging.Message{Topic: topic}
+	if len(msg.Data) > 0 {
+		m.Data = maps.Clone(msg.Data)
+	}
+	if msg.Title != "" || msg.Body != "" {
+		m.Notification = &messaging.Notification{
+			Title: msg.Title,
+			Body:  msg.Body,
+		}
+	}
+	return m
+}
+
+func filterNonEmptyTopics(topics []string) []string {
+	out := make([]string, 0, len(topics))
+	for _, t := range topics {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func filterNonEmptyTokens(tokens []string) []string {

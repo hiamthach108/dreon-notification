@@ -18,6 +18,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/repository"
 	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
+	"github.com/hiamthach108/dreon-notification/pkg/fcm"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	"github.com/stretchr/testify/assert"
@@ -71,7 +72,7 @@ func newNotificationSvc(
 	cfg *config.AppConfig,
 ) INotificationSvc {
 	t.Helper()
-	return newNotificationSvcWithCache(t, repo, pub, noopCache{}, emailClient, cfg)
+	return newNotificationSvcWithCache(t, repo, pub, noopCache{}, emailClient, nil, cfg)
 }
 
 func newNotificationSvcWithCache(
@@ -80,6 +81,7 @@ func newNotificationSvcWithCache(
 	pub *amqp.Publisher,
 	appCache cache.ICache,
 	emailClient email.IEmailClient,
+	fcmClient fcm.IFCMClient,
 	cfg *config.AppConfig,
 ) INotificationSvc {
 	t.Helper()
@@ -97,7 +99,7 @@ func newNotificationSvcWithCache(
 		email.NewRenderer(cfg),
 		sms.NewMockClient(),
 		nil,
-		nil,
+		fcmClient,
 		appCache,
 		cfg,
 	)
@@ -129,6 +131,42 @@ func (m *mockEmailClient) SendEmail(ctx context.Context, data *email.EmailData) 
 	m.last = data
 	return m.err
 }
+
+type mockFCMClient struct {
+	lastTokens []string
+	lastTopics []string
+	lastMsg    *fcm.PushMessage
+	tokensErr  error
+	topicsErr  error
+}
+
+func (m *mockFCMClient) SendToTokens(ctx context.Context, tokens []string, msg *fcm.PushMessage) (*fcm.SendOutcome, error) {
+	m.lastTokens = append([]string(nil), tokens...)
+	m.lastMsg = msg
+	if m.tokensErr != nil {
+		return nil, m.tokensErr
+	}
+	n := len(tokens)
+	if n == 0 {
+		return &fcm.SendOutcome{}, nil
+	}
+	return &fcm.SendOutcome{SuccessCount: n, FailureCount: 0}, nil
+}
+
+func (m *mockFCMClient) SendToTopics(ctx context.Context, topics []string, msg *fcm.PushMessage) (*fcm.SendOutcome, error) {
+	m.lastTopics = append([]string(nil), topics...)
+	m.lastMsg = msg
+	if m.topicsErr != nil {
+		return nil, m.topicsErr
+	}
+	n := len(topics)
+	if n == 0 {
+		return &fcm.SendOutcome{}, nil
+	}
+	return &fcm.SendOutcome{SuccessCount: n, FailureCount: 0}, nil
+}
+
+var _ fcm.IFCMClient = (*mockFCMClient)(nil)
 
 type mockNotificationRepo struct{}
 
@@ -403,6 +441,67 @@ func TestNotificationSvc_SendNotification_ChannelRouting(t *testing.T) {
 	}
 }
 
+func TestNotificationSvc_SendNotification_Push_MessagingGroup_UsesTopics(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cfg := testEmailConfig(t)
+	mockFCM := &mockFCMClient{}
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, nil, noopCache{}, &mockEmailClient{}, mockFCM, cfg)
+
+	req := &aggregate.SendNotificationReq{
+		IdempotencyKey: "idem-push-group",
+		Source:         "test",
+		Channel:        string(model.NotificationChannelPush),
+		Type:           string(model.NotificationTypeMessagingGroup),
+		Title:          "New message",
+		Message:        "Hello group",
+		Recipients:     []string{"group-uuid-1", "group-uuid-2"},
+	}
+	err := svc.SendNotification(ctx, req)
+	require.NoError(t, err)
+	assert.Empty(t, mockFCM.lastTokens)
+	assert.Equal(t, []string{"group-uuid-1", "group-uuid-2"}, mockFCM.lastTopics)
+	require.NotNil(t, mockFCM.lastMsg)
+	assert.Equal(t, "New message", mockFCM.lastMsg.Title)
+	assert.Equal(t, "Hello group", mockFCM.lastMsg.Body)
+}
+
+func TestNotificationSvc_SendNotification_Push_NonGroup_UsesTokens(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cfg := testEmailConfig(t)
+	mockFCM := &mockFCMClient{}
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, nil, noopCache{}, &mockEmailClient{}, mockFCM, cfg)
+
+	req := &aggregate.SendNotificationReq{
+		IdempotencyKey: "idem-push-tok",
+		Source:         "test",
+		Channel:        string(model.NotificationChannelPush),
+		Type:           string(model.NotificationTypeWelcome),
+		Title:          "Hi",
+		Message:        "Welcome",
+		Recipients:     []string{"device-token-1"},
+	}
+	err := svc.SendNotification(ctx, req)
+	require.NoError(t, err)
+	assert.Empty(t, mockFCM.lastTopics)
+	assert.Equal(t, []string{"device-token-1"}, mockFCM.lastTokens)
+}
+
+func TestNotificationSvc_SendNotification_Email_MessagingGroup_Rejected(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cfg := testEmailConfig(t)
+	svc := newNotificationSvc(t, &mockNotificationRepo{}, nil, &mockEmailClient{}, cfg)
+
+	req := sampleEmailEnqueueReq()
+	req.Type = string(model.NotificationTypeMessagingGroup)
+
+	err := svc.SendNotification(ctx, req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "MESSAGING_GROUP")
+}
+
 // --- EnqueueNotification ---
 
 func TestNotificationSvc_EnqueueNotification_ValidationError(t *testing.T) {
@@ -505,7 +604,7 @@ func TestNotificationSvc_EnqueueDueScheduledNotifications_ErrWithoutCache(t *tes
 	var nilCache cache.ICache
 	// Non-nil publisher pointer is required so the service reaches the cache check.
 	pub := new(amqp.Publisher)
-	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, pub, nilCache, nil, testEmailConfig(t))
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, pub, nilCache, nil, nil, testEmailConfig(t))
 	require.Error(t, svc.EnqueueDueScheduledNotifications(ctx, 5))
 }
 
@@ -519,7 +618,7 @@ func TestNotificationSvc_EnqueueDueScheduledNotifications_SetNXSkipsWhenKeyExist
 	}}
 	seqCache := &seqBoolCache{results: []bool{false}}
 	pub := new(amqp.Publisher)
-	svc := newNotificationSvcWithCache(t, repo, pub, seqCache, nil, cfg)
+	svc := newNotificationSvcWithCache(t, repo, pub, seqCache, nil, nil, cfg)
 	require.NoError(t, svc.EnqueueDueScheduledNotifications(ctx, 10))
 	assert.Equal(t, 1, seqCache.i, "SetNX should run once per row")
 }

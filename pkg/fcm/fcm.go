@@ -9,6 +9,7 @@ import (
 var (
 	ErrMissingCredentials = errors.New("missing Firebase credentials path")
 	ErrNoTokens           = errors.New("no FCM registration tokens")
+	ErrNoTopics           = errors.New("no FCM topic names")
 	ErrEmptyMessage       = errors.New("message must include title/body and/or data payload")
 )
 
@@ -25,7 +26,8 @@ type SendOutcome struct {
 	FailureCount int
 }
 
-// IFCMClient sends FCM messages to device registration tokens.
+// IFCMClient sends FCM messages to device tokens and to topics (e.g. one topic per messaging group).
 type IFCMClient interface {
 	SendToTokens(ctx context.Context, tokens []string, msg *PushMessage) (*SendOutcome, error)
+	SendToTopics(ctx context.Context, topics []string, msg *PushMessage) (*SendOutcome, error)
 }

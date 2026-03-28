@@ -40,6 +40,7 @@ const (
 	NotificationTypeVerifyOTP      NotificationType = "VERIFY_OTP"
 	NotificationTypeForgotPassword NotificationType = "FORGOT_PASSWORD"
 	NotificationTypeResetPassword  NotificationType = "RESET_PASSWORD"
+	NotificationTypeMessagingGroup NotificationType = "MESSAGING_GROUP"
 )
 
 type Notification struct {

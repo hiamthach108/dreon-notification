@@ -13,6 +13,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/presentation/events"
 	grpcserver "github.com/hiamthach108/dreon-notification/presentation/grpc"
 	"github.com/hiamthach108/dreon-notification/presentation/http"
+	"github.com/hiamthach108/dreon-notification/presentation/http/handler"
 	"github.com/hiamthach108/dreon-notification/presentation/worker"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
@@ -43,9 +44,15 @@ func main() {
 
 			// Repositories
 			repository.NewNotificationRepository,
+			repository.NewPushTopicRepository,
 
 			// Services
 			service.NewNotificationSvc,
+			service.NewPushTopicSvc,
+
+			// Handlers
+			handler.NewNotificationHandler,
+			handler.NewPushTopicHandler,
 
 			// gRPC server (NotiInternal: notification management)
 			grpcserver.NewNotiInternalServer,

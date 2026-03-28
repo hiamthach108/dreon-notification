@@ -9,6 +9,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/shared/constant"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/validator"
+	"github.com/hiamthach108/dreon-notification/presentation/http/handler"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/fx"
@@ -23,6 +24,8 @@ type HttpServer struct {
 func NewHttpServer(
 	config *config.AppConfig,
 	logger logger.ILogger,
+	notificationHandler *handler.NotificationHandler,
+	pushTopicHandler *handler.PushTopicHandler,
 ) *HttpServer {
 	e := echo.New()
 	e.HideBanner = true
@@ -75,6 +78,12 @@ func NewHttpServer(
 			"message": "pong",
 		})
 	})
+
+	// Routes registration
+	v1 := e.Group("/api/v1")
+
+	notificationHandler.RegisterRoutes(v1.Group("/notifications"))
+	pushTopicHandler.RegisterRoutes(v1.Group("/push-topics"))
 
 	return &HttpServer{
 		config: *config,

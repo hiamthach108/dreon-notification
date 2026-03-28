@@ -26,6 +26,7 @@ import (
 type INotificationSvc interface {
 	CreateNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.NotificationAggregate, error)
 	SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) error
+	// Queue operations
 	EnqueueNotification(ctx context.Context, req *aggregate.SendNotificationReq) (string, error)
 	ProcessNotificationFromQueue(msg *message.Message) error
 	ProcessNotificationRetryFromQueue(msg *message.Message) error
@@ -320,14 +321,6 @@ func (s *NotificationSvc) backoffParams() (initialSec, maxSec int) {
 	return initialSec, maxSec
 }
 
-func (s *NotificationSvc) publishLease() time.Duration {
-	sec := s.cfg.Notification.RetryPublishLeaseSec
-	if sec <= 0 {
-		sec = 300
-	}
-	return time.Duration(sec) * time.Second
-}
-
 func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) error {
 	switch req.Channel {
 	case string(model.NotificationChannelEmail):
@@ -343,7 +336,18 @@ func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.S
 	}
 }
 
+func (s *NotificationSvc) publishLease() time.Duration {
+	sec := s.cfg.Notification.RetryPublishLeaseSec
+	if sec <= 0 {
+		sec = 300
+	}
+	return time.Duration(sec) * time.Second
+}
+
 func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNotificationReq) error {
+	if req.Type == string(model.NotificationTypeMessagingGroup) {
+		return errorx.New(errorx.ErrInternal, "MESSAGING_GROUP is only supported for PUSH channel")
+	}
 	templateName, ok := constant.EmailTemplateMap[req.Type]
 	if !ok {
 		return errorx.New(errorx.ErrInternal, fmt.Sprintf("no email template for type: %s", req.Type))
@@ -370,6 +374,9 @@ func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNoti
 }
 
 func (s *NotificationSvc) sendSMS(ctx context.Context, req *aggregate.SendNotificationReq) error {
+	if req.Type == string(model.NotificationTypeMessagingGroup) {
+		return errorx.New(errorx.ErrInternal, "MESSAGING_GROUP is only supported for PUSH channel")
+	}
 	if s.smsClient == nil {
 		return errorx.New(errorx.ErrInternal, "SMS client not configured")
 	}
@@ -408,15 +415,24 @@ func (s *NotificationSvc) sendPush(ctx context.Context, req *aggregate.SendNotif
 		Title: req.Title,
 		Body:  req.Message,
 	}
-	outcome, err := s.fcmClient.SendToTokens(ctx, req.Recipients, msg)
+	var outcome *fcm.SendOutcome
+	var err error
+	if req.Type == string(model.NotificationTypeMessagingGroup) {
+		outcome, err = s.fcmClient.SendToTopics(ctx, req.Recipients, msg)
+	} else {
+		outcome, err = s.fcmClient.SendToTokens(ctx, req.Recipients, msg)
+	}
 	if err != nil {
 		return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send push: %w", err))
 	}
 	if outcome.SuccessCount == 0 {
+		if req.Type == string(model.NotificationTypeMessagingGroup) {
+			return errorx.New(errorx.ErrInternal, "no FCM topics were successfully sent")
+		}
 		return errorx.New(errorx.ErrInternal, "no FCM tokens were successfully sent")
 	}
 	if outcome.FailureCount > 0 {
-		s.logger.Error("failed to send push to some tokens", "success_count", outcome.SuccessCount, "failure_count", outcome.FailureCount)
+		s.logger.Error("failed to send push to some recipients", "success_count", outcome.SuccessCount, "failure_count", outcome.FailureCount)
 	}
 	s.logger.Info("push sent", "success_count", outcome.SuccessCount, "failure_count", outcome.FailureCount)
 	return nil
