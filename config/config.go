@@ -71,6 +71,10 @@ type AppConfig struct {
 	RabbitMQ struct {
 		URL string `env:"RABBITMQ_URL"`
 	}
+
+	Firebase struct {
+		CredentialsPath string `env:"FIREBASE_CREDENTIALS_PATH" default:"secrets/firebase.json"`
+	}
 }
 
 func NewAppConfig() (*AppConfig, error) {

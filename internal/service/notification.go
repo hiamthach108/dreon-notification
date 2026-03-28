@@ -16,6 +16,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/shared/constant"
 	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
+	"github.com/hiamthach108/dreon-notification/pkg/fcm"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	"github.com/hiamthach108/dreon-notification/pkg/validator"
@@ -24,7 +25,7 @@ import (
 
 type INotificationSvc interface {
 	CreateNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.NotificationAggregate, error)
-	SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error)
+	SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) error
 	EnqueueNotification(ctx context.Context, req *aggregate.SendNotificationReq) (string, error)
 	ProcessNotificationFromQueue(msg *message.Message) error
 	ProcessNotificationRetryFromQueue(msg *message.Message) error
@@ -41,6 +42,7 @@ type NotificationSvc struct {
 	fromEmail     string
 	smsClient     sms.ISMSClient
 	smsBodyRender sms.IBodyRenderer
+	fcmClient     fcm.IFCMClient
 	cache         cache.ICache
 	cfg           *config.AppConfig
 }
@@ -54,6 +56,7 @@ func NewNotificationSvc(
 	renderer email.IRenderer,
 	smsClient sms.ISMSClient,
 	smsBodyRender sms.IBodyRenderer,
+	fcmClient fcm.IFCMClient,
 	appCache cache.ICache,
 	cfg *config.AppConfig,
 ) INotificationSvc {
@@ -66,6 +69,7 @@ func NewNotificationSvc(
 		fromEmail:     cfg.Email.Sender,
 		smsClient:     smsClient,
 		smsBodyRender: smsBodyRender,
+		fcmClient:     fcmClient,
 		cache:         appCache,
 		cfg:           cfg,
 	}
@@ -138,7 +142,7 @@ func (s *NotificationSvc) ProcessNotificationFromQueue(msg *message.Message) err
 		s.logger.Error("invalid queue payload, message committed", "message_uuid", msg.UUID, "error", err)
 		return nil
 	}
-	_, err := s.SendNotification(ctx, &payload.Req)
+	err := s.SendNotification(ctx, &payload.Req)
 	if err != nil {
 		initial, max := s.backoffParams()
 		if recErr := s.repo.RecordSendFailure(ctx, payload.NotificationID, initial, max); recErr != nil {
@@ -281,7 +285,7 @@ func (s *NotificationSvc) ProcessNotificationRetryFromQueue(msg *message.Message
 	req := &aggregate.SendNotificationReq{}
 	req.FromModel(n)
 	initial, max := s.backoffParams()
-	_, sendErr := s.SendNotification(ctx, req)
+	sendErr := s.SendNotification(ctx, req)
 	if sendErr != nil {
 		if recErr := s.repo.RecordSendFailure(ctx, n.ID, initial, max); recErr != nil {
 			s.logger.Error("record send failure after retry queue send error", "notification_id", n.ID, "message_uuid", msg.UUID, "error", recErr)
@@ -324,7 +328,7 @@ func (s *NotificationSvc) publishLease() time.Duration {
 	return time.Duration(sec) * time.Second
 }
 
-func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
+func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) error {
 	switch req.Channel {
 	case string(model.NotificationChannelEmail):
 		return s.sendEmail(ctx, req)
@@ -335,14 +339,14 @@ func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.S
 	case string(model.NotificationChannelInApp):
 		return s.sendInApp(ctx, req)
 	default:
-		return nil, errorx.New(errorx.ErrInternal, fmt.Sprintf("unsupported channel: %s", req.Channel))
+		return errorx.New(errorx.ErrInternal, fmt.Sprintf("unsupported channel: %s", req.Channel))
 	}
 }
 
-func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
+func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNotificationReq) error {
 	templateName, ok := constant.EmailTemplateMap[req.Type]
 	if !ok {
-		return nil, errorx.New(errorx.ErrInternal, fmt.Sprintf("no email template for type: %s", req.Type))
+		return errorx.New(errorx.ErrInternal, fmt.Sprintf("no email template for type: %s", req.Type))
 	}
 	params := req.Params
 	if params == nil {
@@ -350,7 +354,7 @@ func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNoti
 	}
 	html, err := s.renderer.Render(ctx, templateName, params)
 	if err != nil {
-		return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("render email template: %w", err))
+		return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("render email template: %w", err))
 	}
 	data := &email.EmailData{
 		From:    s.fromEmail,
@@ -360,15 +364,14 @@ func (s *NotificationSvc) sendEmail(ctx context.Context, req *aggregate.SendNoti
 	}
 	err = s.emailClient.SendEmail(ctx, data)
 	if err != nil {
-		return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send email: %w", err))
+		return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send email: %w", err))
 	}
-	// TODO: persist notification record via repo and return NotificationID
-	return &aggregate.SendNotificationResp{NotificationID: ""}, nil
+	return nil
 }
 
-func (s *NotificationSvc) sendSMS(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
+func (s *NotificationSvc) sendSMS(ctx context.Context, req *aggregate.SendNotificationReq) error {
 	if s.smsClient == nil {
-		return nil, errorx.New(errorx.ErrInternal, "SMS client not configured")
+		return errorx.New(errorx.ErrInternal, "SMS client not configured")
 	}
 	params := req.Params
 	if params == nil {
@@ -379,28 +382,46 @@ func (s *NotificationSvc) sendSMS(ctx context.Context, req *aggregate.SendNotifi
 		var err error
 		body, err = s.smsBodyRender.RenderBody(ctx, templateName, params)
 		if err != nil {
-			return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("render sms template: %w", err))
+			return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("render sms template: %w", err))
 		}
 	} else {
 		body = req.Message
 	}
 	if body == "" {
-		return nil, errorx.New(errorx.ErrInternal, "SMS body is empty")
+		return errorx.New(errorx.ErrInternal, "SMS body is empty")
 	}
 	data := &sms.SMSData{
 		To:   req.Recipients,
 		Body: body,
 	}
 	if err := s.smsClient.SendSMS(ctx, data); err != nil {
-		return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send sms: %w", err))
+		return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send sms: %w", err))
 	}
-	return &aggregate.SendNotificationResp{NotificationID: ""}, nil
+	return nil
 }
 
-func (s *NotificationSvc) sendPush(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
-	return nil, errorx.New(errorx.ErrInternal, "PUSH channel not implemented")
+func (s *NotificationSvc) sendPush(ctx context.Context, req *aggregate.SendNotificationReq) error {
+	if s.fcmClient == nil {
+		return errorx.New(errorx.ErrInternal, "FCM client not configured")
+	}
+	msg := &fcm.PushMessage{
+		Title: req.Title,
+		Body:  req.Message,
+	}
+	outcome, err := s.fcmClient.SendToTokens(ctx, req.Recipients, msg)
+	if err != nil {
+		return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("send push: %w", err))
+	}
+	if outcome.SuccessCount == 0 {
+		return errorx.New(errorx.ErrInternal, "no FCM tokens were successfully sent")
+	}
+	if outcome.FailureCount > 0 {
+		s.logger.Error("failed to send push to some tokens", "success_count", outcome.SuccessCount, "failure_count", outcome.FailureCount)
+	}
+	s.logger.Info("push sent", "success_count", outcome.SuccessCount, "failure_count", outcome.FailureCount)
+	return nil
 }
 
-func (s *NotificationSvc) sendInApp(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {
-	return nil, errorx.New(errorx.ErrInternal, "IN_APP channel not implemented")
+func (s *NotificationSvc) sendInApp(ctx context.Context, req *aggregate.SendNotificationReq) error {
+	return errorx.New(errorx.ErrInternal, "IN_APP channel not implemented")
 }

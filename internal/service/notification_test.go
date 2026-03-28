@@ -97,6 +97,7 @@ func newNotificationSvcWithCache(
 		email.NewRenderer(cfg),
 		sms.NewMockClient(),
 		nil,
+		nil,
 		appCache,
 		cfg,
 	)
@@ -322,9 +323,8 @@ func TestNotificationSvc_SendNotification_Email_Welcome(t *testing.T) {
 	req.Title = "Welcome!"
 	req.Params = map[string]any{"Name": "Alice", "AppURL": "https://app.example.com"}
 
-	resp, err := svc.SendNotification(ctx, req)
+	err := svc.SendNotification(ctx, req)
 	require.NoError(t, err)
-	require.NotNil(t, resp)
 
 	require.NotNil(t, mockClient.last)
 	assert.Equal(t, "noreply@example.com", mockClient.last.From)
@@ -342,7 +342,7 @@ func TestNotificationSvc_SendNotification_Email_UnsupportedType(t *testing.T) {
 
 	svc := newNotificationSvc(t, &mockNotificationRepo{}, nil, mockClient, cfg)
 
-	_, err := svc.SendNotification(ctx, &aggregate.SendNotificationReq{
+	err := svc.SendNotification(ctx, &aggregate.SendNotificationReq{
 		Channel:    string(model.NotificationChannelEmail),
 		Type:       "UNKNOWN_TYPE",
 		Title:      "Test",
@@ -375,13 +375,13 @@ func TestNotificationSvc_SendNotification_ChannelRouting(t *testing.T) {
 			wantErr: "not configured",
 		},
 		{
-			name: "PUSH_not_implemented",
+			name: "PUSH_fcm_not_configured",
 			req: &aggregate.SendNotificationReq{
 				Channel:    string(model.NotificationChannelPush),
 				Title:      "Push",
 				Recipients: []string{"device-token"},
 			},
-			wantErr: "not implemented",
+			wantErr: "FCM client not configured",
 		},
 		{
 			name: "IN_APP_not_implemented",
@@ -396,7 +396,7 @@ func TestNotificationSvc_SendNotification_ChannelRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := svc.SendNotification(ctx, tt.req)
+			err := svc.SendNotification(ctx, tt.req)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})

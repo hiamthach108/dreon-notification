@@ -140,7 +140,7 @@ func (x *SendNotificationRequest) GetExpiredAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// SendNotificationResponse mirrors aggregate.SendNotificationResp.
+// SendNotificationResponse carries the notification row ID when the request is accepted (enqueue).
 type SendNotificationResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	NotificationId string                 `protobuf:"bytes,1,opt,name=notificationId,proto3" json:"notificationId,omitempty"`

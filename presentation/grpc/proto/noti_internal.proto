@@ -27,7 +27,7 @@ message SendNotificationRequest {
   google.protobuf.Timestamp expiredAt = 10;
 }
 
-// SendNotificationResponse mirrors aggregate.SendNotificationResp.
+// SendNotificationResponse carries the notification row ID when the request is accepted (enqueue).
 message SendNotificationResponse {
   string notificationId = 1;
 }

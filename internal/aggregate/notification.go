@@ -83,10 +83,6 @@ func ChannelToProvider(channel string) model.NotificationProvider {
 	return ""
 }
 
-type SendNotificationResp struct {
-	NotificationID string `json:"notificationId"`
-}
-
 // NotificationEnqueuePayload is the message payload published to the notifications queue.
 // Used by the service when publishing and by the consumer when unmarshalling.
 type NotificationEnqueuePayload struct {

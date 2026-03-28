@@ -7,6 +7,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/database"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
+	"github.com/hiamthach108/dreon-notification/pkg/fcm"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	"github.com/hiamthach108/dreon-notification/presentation/events"
@@ -33,6 +34,7 @@ func main() {
 			email.NewRenderer,
 			sms.NewMockClient, // TODO: remove this and use NewTwilioClient when Twilio is configured
 			sms.NewBodyRenderer,
+			fcm.NewClient,
 
 			// Events
 			events.NewLoggerAdapter,
