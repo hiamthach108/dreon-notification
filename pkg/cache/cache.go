@@ -52,6 +52,11 @@ func NewAppCache(config *config.AppConfig, logger logger.ILogger) (ICache, error
 // 🔹 Basic Cache Operations
 // =============================
 
+func (c *appCache) SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	rKey := c.prefixedKey(key)
+	return c.redisClient.SetNX(ctx, rKey, "1", ttl).Result()
+}
+
 func (c *appCache) Set(key string, value any, expireTime *time.Duration) error {
 	rKey := c.prefixedKey(key)
 

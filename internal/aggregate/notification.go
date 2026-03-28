@@ -30,7 +30,7 @@ func (req *SendNotificationReq) ToModel() *model.Notification {
 		Title:          req.Title,
 		Message:        req.Message,
 		Recipients:     req.Recipients,
-		Provider:       model.NotificationProvider(req.Channel),
+		Provider:       ChannelToProvider(req.Channel),
 	}
 	if req.ScheduledAt != nil {
 		n.ScheduledAt = *req.ScheduledAt
@@ -67,6 +67,20 @@ func (req *SendNotificationReq) FromModel(m *model.Notification) {
 		t := m.ScheduledAt
 		req.ScheduledAt = &t
 	}
+}
+
+func ChannelToProvider(channel string) model.NotificationProvider {
+	switch channel {
+	case string(model.NotificationChannelEmail):
+		return model.NotificationProviderResend
+	case string(model.NotificationChannelSms):
+		return model.NotificationProviderTwilio
+	case string(model.NotificationChannelPush):
+		return model.NotificationProviderFirebase
+	case string(model.NotificationChannelInApp):
+		return model.NotificationProviderFirebase
+	}
+	return ""
 }
 
 type SendNotificationResp struct {

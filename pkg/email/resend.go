@@ -25,7 +25,7 @@ func NewResendEmailClient(config *config.AppConfig, logger logger.ILogger) IEmai
 }
 
 func (c *ResendEmailClient) SendEmail(ctx context.Context, email *EmailData) error {
-	c.logger.Info("Sending email", "from", c.config.Email.Sender, "to", email.To, "subject", email.Subject)
+	c.logger.Info("Sending email", "from", c.config.Email.Sender, "to", email.To)
 
 	params := &resend.SendEmailRequest{
 		From:    c.config.Email.Sender,

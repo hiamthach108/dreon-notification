@@ -7,5 +7,6 @@ const (
 	CacheDefaultTTL time.Duration = 1 * time.Hour
 
 	// Cache key prefixes
-	CacheKeyPrefixNotification = "notifications:"
+	CacheKeyPrefixNotification    = "notifications:"
+	CacheKeyScheduledEnqueueDedup = "scheduled_enqueue:"
 )

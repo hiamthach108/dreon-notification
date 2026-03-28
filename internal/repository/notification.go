@@ -16,6 +16,7 @@ type INotificationRepository interface {
 	LockPendingRetriesDueForUpdate(tx *gorm.DB, limit int, notAfter time.Time) ([]model.Notification, error)
 	UpdateNextRetryAt(tx *gorm.DB, id string, at time.Time) error
 	RecordSendFailure(ctx context.Context, id string, backoffInitialSec, backoffMaxSec int) error
+	FindDueScheduledNotifications(ctx context.Context, limit int, notAfter time.Time) ([]model.Notification, error)
 }
 
 type notificationRepository struct {
@@ -28,6 +29,24 @@ func NewNotificationRepository(dbClient *gorm.DB) INotificationRepository {
 
 func (r *notificationRepository) RunInTransaction(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	return r.dbClient.WithContext(ctx).Transaction(fn)
+}
+
+func (r *notificationRepository) FindDueScheduledNotifications(ctx context.Context, limit int, notAfter time.Time) ([]model.Notification, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	var zero time.Time
+	var rows []model.Notification
+	err := r.dbClient.WithContext(ctx).
+		Where(`status = ? AND attempt_count = 0 AND scheduled_at > ? AND scheduled_at <= ?`,
+			model.NotificationStatusPending, zero, notAfter).
+		Order("scheduled_at ASC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (r *notificationRepository) LockPendingRetriesDueForUpdate(tx *gorm.DB, limit int, notAfter time.Time) ([]model.Notification, error) {

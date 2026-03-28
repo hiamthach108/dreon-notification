@@ -16,6 +16,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/aggregate"
 	"github.com/hiamthach108/dreon-notification/internal/model"
 	"github.com/hiamthach108/dreon-notification/internal/repository"
+	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
@@ -70,6 +71,18 @@ func newNotificationSvc(
 	cfg *config.AppConfig,
 ) INotificationSvc {
 	t.Helper()
+	return newNotificationSvcWithCache(t, repo, pub, noopCache{}, emailClient, cfg)
+}
+
+func newNotificationSvcWithCache(
+	t *testing.T,
+	repo repository.INotificationRepository,
+	pub *amqp.Publisher,
+	appCache cache.ICache,
+	emailClient email.IEmailClient,
+	cfg *config.AppConfig,
+) INotificationSvc {
+	t.Helper()
 	if cfg == nil {
 		cfg = testEmailConfig(t)
 	}
@@ -84,6 +97,7 @@ func newNotificationSvc(
 		email.NewRenderer(cfg),
 		sms.NewMockClient(),
 		nil,
+		appCache,
 		cfg,
 	)
 }
@@ -150,8 +164,90 @@ func (mockNotificationRepo) UpdateNextRetryAt(tx *gorm.DB, id string, at time.Ti
 func (mockNotificationRepo) RecordSendFailure(ctx context.Context, id string, initial, max int) error {
 	return nil
 }
+func (mockNotificationRepo) FindDueScheduledNotifications(ctx context.Context, limit int, notAfter time.Time) ([]model.Notification, error) {
+	return nil, nil
+}
 
 var _ repository.INotificationRepository = (*mockNotificationRepo)(nil)
+
+type noopCache struct{}
+
+func (noopCache) SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+func (noopCache) Set(key string, value any, expireTime *time.Duration) error { return nil }
+func (noopCache) Get(key string, data any) error                             { return cache.ErrCacheNil }
+func (noopCache) Delete(key string) error                                    { return nil }
+func (noopCache) Clear() error                                               { return nil }
+func (noopCache) ClearWithPrefix(prefix string) error                        { return nil }
+func (noopCache) AddScore(boardKey, member string, score float64) error      { return nil }
+func (noopCache) GetTopN(boardKey string, n int64) ([]cache.LeaderboardEntry, error) {
+	return nil, nil
+}
+func (noopCache) GetRank(boardKey, member string) (rank int64, score float64, err error) {
+	return 0, 0, cache.ErrCacheNil
+}
+func (noopCache) RemoveMember(boardKey, member string) error { return nil }
+func (noopCache) GetAroundMember(boardKey, member string, radius int64) ([]cache.LeaderboardEntry, error) {
+	return nil, nil
+}
+func (noopCache) Publish(stream string, message any) error { return nil }
+func (noopCache) EnsureGroup(stream string, group string) error {
+	return nil
+}
+func (noopCache) Subscribe(stream string, group string, handler cache.ConsumerHandler) error {
+	return nil
+}
+
+var _ cache.ICache = noopCache{}
+
+type seqBoolCache struct {
+	results []bool
+	i       int
+}
+
+func (c *seqBoolCache) SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	if c.i >= len(c.results) {
+		return true, nil
+	}
+	ok := c.results[c.i]
+	c.i++
+	return ok, nil
+}
+func (c *seqBoolCache) Set(key string, value any, expireTime *time.Duration) error { return nil }
+func (c *seqBoolCache) Get(key string, data any) error                             { return cache.ErrCacheNil }
+func (c *seqBoolCache) Delete(key string) error                                    { return nil }
+func (c *seqBoolCache) Clear() error                                               { return nil }
+func (c *seqBoolCache) ClearWithPrefix(prefix string) error                        { return nil }
+func (c *seqBoolCache) AddScore(boardKey, member string, score float64) error      { return nil }
+func (c *seqBoolCache) GetTopN(boardKey string, n int64) ([]cache.LeaderboardEntry, error) {
+	return nil, nil
+}
+func (c *seqBoolCache) GetRank(boardKey, member string) (rank int64, score float64, err error) {
+	return 0, 0, cache.ErrCacheNil
+}
+func (c *seqBoolCache) RemoveMember(boardKey, member string) error { return nil }
+func (c *seqBoolCache) GetAroundMember(boardKey, member string, radius int64) ([]cache.LeaderboardEntry, error) {
+	return nil, nil
+}
+func (c *seqBoolCache) Publish(stream string, message any) error { return nil }
+func (c *seqBoolCache) EnsureGroup(stream string, group string) error {
+	return nil
+}
+func (c *seqBoolCache) Subscribe(stream string, group string, handler cache.ConsumerHandler) error {
+	return nil
+}
+
+var _ cache.ICache = (*seqBoolCache)(nil)
+
+type scheduledRowsRepo struct {
+	mockNotificationRepo
+	rows []model.Notification
+}
+
+func (r *scheduledRowsRepo) FindDueScheduledNotifications(ctx context.Context, limit int, notAfter time.Time) ([]model.Notification, error) {
+	return r.rows, nil
+}
 
 // stubCreateRepo assigns a fixed ID on Create when the model has none (enqueue tests).
 type stubCreateRepo struct {
@@ -333,6 +429,21 @@ func TestNotificationSvc_EnqueueNotification_ErrWithoutPublisher(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestNotificationSvc_EnqueueNotification_FutureScheduledAt_NoPublishWithoutPublisher(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cfg := testEmailConfig(t)
+	repo := stubCreateRepo{createdID: "sched-1"}
+	svc := newNotificationSvc(t, repo, nil, nil, cfg)
+	future := time.Now().UTC().Add(1 * time.Hour)
+	req := sampleEmailEnqueueReq()
+	req.ScheduledAt = &future
+
+	id, err := svc.EnqueueNotification(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, "sched-1", id)
+}
+
 // --- EnqueuePendingRetries ---
 
 func TestNotificationSvc_EnqueuePendingRetries_BatchSizeZero_NoOp(t *testing.T) {
@@ -351,6 +462,66 @@ func TestNotificationSvc_EnqueuePendingRetries_ErrWithoutPublisher(t *testing.T)
 	svc := newNotificationSvc(t, repo, nil, nil, testEmailConfig(t))
 
 	require.Error(t, svc.EnqueuePendingRetries(ctx, 10))
+}
+
+// --- EnqueueDueScheduledNotifications ---
+
+func sampleDueScheduledNotification(id string, scheduledAt time.Time) model.Notification {
+	paramsJSON, _ := json.Marshal(map[string]any{"Name": "Bob", "AppURL": "https://app.example.com"})
+	return model.Notification{
+		BaseModel:      model.BaseModel{ID: id},
+		IdempotencyKey: "idem-" + id,
+		Source:         "test",
+		Channel:        model.NotificationChannelEmail,
+		Type:           model.NotificationTypeWelcome,
+		Status:         model.NotificationStatusPending,
+		Title:          "Welcome",
+		Recipients:     []string{"user@example.com"},
+		Params:         paramsJSON,
+		Provider:       model.NotificationProviderResend,
+		MaxAttempts:    3,
+		AttemptCount:   0,
+		ScheduledAt:    scheduledAt,
+	}
+}
+
+func TestNotificationSvc_EnqueueDueScheduledNotifications_BatchSizeZero_NoOp(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	svc := newNotificationSvc(t, &mockNotificationRepo{}, nil, nil, testEmailConfig(t))
+	require.NoError(t, svc.EnqueueDueScheduledNotifications(ctx, 0))
+}
+
+func TestNotificationSvc_EnqueueDueScheduledNotifications_ErrWithoutPublisher(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	svc := newNotificationSvc(t, &mockNotificationRepo{}, nil, nil, testEmailConfig(t))
+	require.Error(t, svc.EnqueueDueScheduledNotifications(ctx, 5))
+}
+
+func TestNotificationSvc_EnqueueDueScheduledNotifications_ErrWithoutCache(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	var nilCache cache.ICache
+	// Non-nil publisher pointer is required so the service reaches the cache check.
+	pub := new(amqp.Publisher)
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, pub, nilCache, nil, testEmailConfig(t))
+	require.Error(t, svc.EnqueueDueScheduledNotifications(ctx, 5))
+}
+
+func TestNotificationSvc_EnqueueDueScheduledNotifications_SetNXSkipsWhenKeyExists(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cfg := testEmailConfig(t)
+	past := time.Now().UTC().Add(-time.Minute)
+	repo := &scheduledRowsRepo{rows: []model.Notification{
+		sampleDueScheduledNotification("sched-a", past),
+	}}
+	seqCache := &seqBoolCache{results: []bool{false}}
+	pub := new(amqp.Publisher)
+	svc := newNotificationSvcWithCache(t, repo, pub, seqCache, nil, cfg)
+	require.NoError(t, svc.EnqueueDueScheduledNotifications(ctx, 10))
+	assert.Equal(t, 1, seqCache.i, "SetNX should run once per row")
 }
 
 // --- ProcessNotificationFromQueue ---

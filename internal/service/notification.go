@@ -14,6 +14,7 @@ import (
 	"github.com/hiamthach108/dreon-notification/internal/model"
 	"github.com/hiamthach108/dreon-notification/internal/repository"
 	"github.com/hiamthach108/dreon-notification/internal/shared/constant"
+	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
@@ -28,6 +29,7 @@ type INotificationSvc interface {
 	ProcessNotificationFromQueue(msg *message.Message) error
 	ProcessNotificationRetryFromQueue(msg *message.Message) error
 	EnqueuePendingRetries(ctx context.Context, batchSize int) error
+	EnqueueDueScheduledNotifications(ctx context.Context, batchSize int) error
 }
 
 type NotificationSvc struct {
@@ -39,6 +41,7 @@ type NotificationSvc struct {
 	fromEmail     string
 	smsClient     sms.ISMSClient
 	smsBodyRender sms.IBodyRenderer
+	cache         cache.ICache
 	cfg           *config.AppConfig
 }
 
@@ -51,6 +54,7 @@ func NewNotificationSvc(
 	renderer email.IRenderer,
 	smsClient sms.ISMSClient,
 	smsBodyRender sms.IBodyRenderer,
+	appCache cache.ICache,
 	cfg *config.AppConfig,
 ) INotificationSvc {
 	return &NotificationSvc{
@@ -62,6 +66,7 @@ func NewNotificationSvc(
 		fromEmail:     cfg.Email.Sender,
 		smsClient:     smsClient,
 		smsBodyRender: smsBodyRender,
+		cache:         appCache,
 		cfg:           cfg,
 	}
 }
@@ -103,6 +108,9 @@ func (s *NotificationSvc) EnqueueNotification(ctx context.Context, req *aggregat
 	}
 	if created == nil || created.ID == "" {
 		return "", errorx.New(errorx.ErrInternal, "notification created but ID is empty")
+	}
+	if req.ScheduledAt != nil && req.ScheduledAt.After(time.Now().UTC()) {
+		return created.ID, nil
 	}
 	if s.publisher == nil {
 		return "", errorx.New(errorx.ErrInternal, "message publisher not configured")
@@ -149,6 +157,58 @@ func (s *NotificationSvc) ProcessNotificationFromQueue(msg *message.Message) err
 		return nil
 	}
 	s.logger.Info("notification processed and message committed", "notification_id", payload.NotificationID, "message_uuid", msg.UUID)
+	return nil
+}
+
+func (s *NotificationSvc) EnqueueDueScheduledNotifications(ctx context.Context, batchSize int) error {
+	if batchSize <= 0 {
+		return nil
+	}
+	if s.publisher == nil {
+		return errorx.New(errorx.ErrInternal, "message publisher not configured")
+	}
+	if s.cache == nil {
+		return errorx.New(errorx.ErrInternal, "cache not configured")
+	}
+	now := time.Now().UTC()
+	rows, err := s.repo.FindDueScheduledNotifications(ctx, batchSize, now)
+	if err != nil {
+		return fmt.Errorf("find due scheduled notifications: %w", err)
+	}
+	ttlSec := s.cfg.Notification.ScheduledDedupTTLSec
+	if ttlSec <= 0 {
+		ttlSec = 86400
+	}
+	ttl := time.Duration(ttlSec) * time.Second
+	for i := range rows {
+		n := rows[i]
+		dedupKey := constant.CacheKeyScheduledEnqueueDedup + n.ID
+		ok, nxErr := s.cache.SetNX(ctx, dedupKey, ttl)
+		if nxErr != nil {
+			s.logger.Error("scheduled enqueue dedup setnx failed", "notification_id", n.ID, "error", nxErr)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		req := &aggregate.SendNotificationReq{}
+		req.FromModel(&n)
+		payload := aggregate.NotificationEnqueuePayload{
+			NotificationID: n.ID,
+			Req:            *req,
+		}
+		payloadBytes, marshalErr := json.Marshal(payload)
+		if marshalErr != nil {
+			s.logger.Error("marshal scheduled enqueue payload", "notification_id", n.ID, "error", marshalErr)
+			continue
+		}
+		msg := message.NewMessage(n.ID, payloadBytes)
+		if pubErr := s.publisher.Publish(constant.EventTopicNotificationsSend, msg); pubErr != nil {
+			s.logger.Error("publish scheduled notification to send topic failed", "notification_id", n.ID, "error", pubErr)
+			continue
+		}
+		s.logger.Info("enqueued scheduled notification send", "notification_id", n.ID)
+	}
 	return nil
 }
 

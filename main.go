@@ -53,6 +53,7 @@ func main() {
 		fx.Invoke(grpcserver.RegisterHooks),
 		fx.Invoke(events.RunConsumers),
 		fx.Invoke(worker.RunPendingRetryWorker),
+		fx.Invoke(worker.RunScheduledNotificationWorker),
 	)
 
 	app.Run()
