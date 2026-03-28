@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill-amqp/v3/pkg/amqp"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/hiamthach108/dreon-notification/internal/aggregate"
@@ -29,15 +30,10 @@ type INotificationSvc interface {
 	EnqueuePendingRetries(ctx context.Context, batchSize int) error
 }
 
-// notificationMessagePublisher publishes Watermill messages (implemented by AMQP publisher).
-type notificationMessagePublisher interface {
-	Publish(topic string, messages ...*message.Message) error
-}
-
 type NotificationSvc struct {
 	logger        logger.ILogger
 	repo          repository.INotificationRepository
-	publisher     notificationMessagePublisher
+	publisher     *amqp.Publisher
 	emailClient   email.IEmailClient
 	renderer      email.IRenderer
 	fromEmail     string
@@ -50,7 +46,7 @@ type NotificationSvc struct {
 func NewNotificationSvc(
 	logger logger.ILogger,
 	repo repository.INotificationRepository,
-	publisher notificationMessagePublisher,
+	publisher *amqp.Publisher,
 	emailClient email.IEmailClient,
 	renderer email.IRenderer,
 	smsClient sms.ISMSClient,
@@ -71,7 +67,7 @@ func NewNotificationSvc(
 }
 
 func (s *NotificationSvc) CreateNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.NotificationAggregate, error) {
-	notification := s.buildNotificationModel(req)
+	notification := req.ToModel()
 	paramsJSON, err := json.Marshal(req.Params)
 	if err != nil {
 		return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("marshal params: %w", err))
@@ -96,7 +92,7 @@ func (s *NotificationSvc) EnqueueNotification(ctx context.Context, req *aggregat
 	if err := validator.ValidateStruct(req); err != nil {
 		return "", errorx.Wrap(errorx.ErrBadRequest, validator.FormatValidationError(err))
 	}
-	notification := s.buildNotificationModel(req)
+	notification := req.ToModel()
 	paramsJSON, _ := json.Marshal(req.Params)
 	notification.Params = paramsJSON
 	notification.MaxAttempts = s.cfg.Notification.MaxAttempts
@@ -107,6 +103,9 @@ func (s *NotificationSvc) EnqueueNotification(ctx context.Context, req *aggregat
 	}
 	if created == nil || created.ID == "" {
 		return "", errorx.New(errorx.ErrInternal, "notification created but ID is empty")
+	}
+	if s.publisher == nil {
+		return "", errorx.New(errorx.ErrInternal, "message publisher not configured")
 	}
 
 	payload := aggregate.NotificationEnqueuePayload{
@@ -219,11 +218,8 @@ func (s *NotificationSvc) ProcessNotificationRetryFromQueue(msg *message.Message
 	if n.AttemptCount < 1 || n.AttemptCount >= n.MaxAttempts {
 		return nil
 	}
-	req, err := notificationToSendReq(n)
-	if err != nil {
-		s.logger.Error("retry: build send request", "notification_id", n.ID, "message_uuid", msg.UUID, "error", err)
-		return nil
-	}
+	req := &aggregate.SendNotificationReq{}
+	req.FromModel(n)
 	initial, max := s.backoffParams()
 	_, sendErr := s.SendNotification(ctx, req)
 	if sendErr != nil {
@@ -266,71 +262,6 @@ func (s *NotificationSvc) publishLease() time.Duration {
 		sec = 300
 	}
 	return time.Duration(sec) * time.Second
-}
-
-func notificationToSendReq(n *model.Notification) (*aggregate.SendNotificationReq, error) {
-	if n == nil {
-		return nil, errorx.New(errorx.ErrInternal, "notification is nil")
-	}
-	var params map[string]any
-	if len(n.Params) > 0 {
-		if err := json.Unmarshal(n.Params, &params); err != nil {
-			return nil, errorx.Wrap(errorx.ErrInternal, fmt.Errorf("unmarshal params: %w", err))
-		}
-	}
-	req := &aggregate.SendNotificationReq{
-		IdempotencyKey: n.IdempotencyKey,
-		Source:         n.Source,
-		Channel:        string(n.Channel),
-		Type:           string(n.Type),
-		Title:          n.Title,
-		Message:        n.Message,
-		Recipients:     append([]string(nil), n.Recipients...),
-		Params:         params,
-	}
-	if n.ExpiredAt != (time.Time{}) {
-		t := n.ExpiredAt
-		req.ExpiredAt = &t
-	}
-	if n.ScheduledAt != (time.Time{}) {
-		t := n.ScheduledAt
-		req.ScheduledAt = &t
-	}
-	return req, nil
-}
-
-func (s *NotificationSvc) buildNotificationModel(req *aggregate.SendNotificationReq) *model.Notification {
-	n := &model.Notification{
-		IdempotencyKey: req.IdempotencyKey,
-		Source:         req.Source,
-		Channel:        model.NotificationChannel(req.Channel),
-		Type:           model.NotificationType(req.Type),
-		Status:         model.NotificationStatusPending,
-		Title:          req.Title,
-		Message:        req.Message,
-		Recipients:     req.Recipients,
-		Provider:       channelToProvider(req.Channel),
-	}
-	if req.ScheduledAt != nil {
-		n.ScheduledAt = *req.ScheduledAt
-	}
-	if req.ExpiredAt != nil {
-		n.ExpiredAt = *req.ExpiredAt
-	}
-	return n
-}
-
-func channelToProvider(channel string) model.NotificationProvider {
-	switch channel {
-	case string(model.NotificationChannelEmail):
-		return model.NotificationProviderResend
-	case string(model.NotificationChannelSms):
-		return model.NotificationProviderTwilio
-	case string(model.NotificationChannelPush), string(model.NotificationChannelInApp):
-		return model.NotificationProviderFirebase
-	default:
-		return model.NotificationProviderResend
-	}
 }
 
 func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) (*aggregate.SendNotificationResp, error) {

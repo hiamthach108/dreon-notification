@@ -44,12 +44,12 @@ type AppConfig struct {
 	}
 
 	Notification struct {
-		MaxAttempts              int `env:"NOTIFICATION_MAX_ATTEMPTS" default:"3"`
-		RetryIntervalSec         int `env:"NOTIFICATION_RETRY_INTERVAL_SEC"`
-		RetryBatchSize           int `env:"NOTIFICATION_RETRY_BATCH_SIZE"`
-		RetryBackoffInitialSec   int `env:"NOTIFICATION_RETRY_BACKOFF_INITIAL_SEC"`
-		RetryBackoffMaxSec       int `env:"NOTIFICATION_RETRY_BACKOFF_MAX_SEC"`
-		RetryPublishLeaseSec     int `env:"NOTIFICATION_RETRY_PUBLISH_LEASE_SEC"`
+		MaxAttempts            int `env:"NOTIFICATION_MAX_ATTEMPTS" default:"3"`
+		RetryIntervalSec       int `env:"NOTIFICATION_RETRY_INTERVAL_SEC" default:"10"`
+		RetryBatchSize         int `env:"NOTIFICATION_RETRY_BATCH_SIZE" default:"5"`
+		RetryBackoffInitialSec int `env:"NOTIFICATION_RETRY_BACKOFF_INITIAL_SEC" default:"30"`
+		RetryBackoffMaxSec     int `env:"NOTIFICATION_RETRY_BACKOFF_MAX_SEC" default:"3600"`
+		RetryPublishLeaseSec   int `env:"NOTIFICATION_RETRY_PUBLISH_LEASE_SEC"`
 	}
 
 	Email struct {

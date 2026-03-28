@@ -16,8 +16,57 @@ type SendNotificationReq struct {
 	Message        string         `json:"message"`
 	Recipients     []string       `json:"recipients" validate:"required,min=1,max=50"`
 	Params         map[string]any `json:"params"`
-	ScheduledAt    *time.Time     `json:"scheduledAt" validate:"omitempty,datetime"`
-	ExpiredAt      *time.Time     `json:"expiredAt" validate:"omitempty,datetime"`
+	ScheduledAt    *time.Time     `json:"scheduledAt" validate:"omitempty"`
+	ExpiredAt      *time.Time     `json:"expiredAt" validate:"omitempty"`
+}
+
+func (req *SendNotificationReq) ToModel() *model.Notification {
+	n := &model.Notification{
+		IdempotencyKey: req.IdempotencyKey,
+		Source:         req.Source,
+		Channel:        model.NotificationChannel(req.Channel),
+		Type:           model.NotificationType(req.Type),
+		Status:         model.NotificationStatusPending,
+		Title:          req.Title,
+		Message:        req.Message,
+		Recipients:     req.Recipients,
+		Provider:       model.NotificationProvider(req.Channel),
+	}
+	if req.ScheduledAt != nil {
+		n.ScheduledAt = *req.ScheduledAt
+	}
+	if req.ExpiredAt != nil {
+		n.ExpiredAt = *req.ExpiredAt
+	}
+	return n
+}
+
+func (req *SendNotificationReq) FromModel(m *model.Notification) {
+	if m == nil {
+		return
+	}
+	req.IdempotencyKey = m.IdempotencyKey
+	req.Source = m.Source
+	req.Channel = string(m.Channel)
+	req.Type = string(m.Type)
+	req.Title = m.Title
+	req.Message = m.Message
+	req.Recipients = append([]string(nil), m.Recipients...)
+	if m.Params != nil {
+		var params map[string]any
+		if err := json.Unmarshal(m.Params, &params); err != nil {
+			params = make(map[string]any)
+		}
+		req.Params = params
+	}
+	if m.ExpiredAt != (time.Time{}) {
+		t := m.ExpiredAt
+		req.ExpiredAt = &t
+	}
+	if m.ScheduledAt != (time.Time{}) {
+		t := m.ScheduledAt
+		req.ScheduledAt = &t
+	}
 }
 
 type SendNotificationResp struct {
