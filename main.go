@@ -46,15 +46,18 @@ func main() {
 			repository.NewNotificationRepository,
 			repository.NewPushTopicRepository,
 			repository.NewMailboxRepository,
+			repository.NewUserFCMTokenRepository,
 
 			// Services
 			service.NewNotificationSvc,
 			service.NewPushTopicSvc,
 			service.NewMailboxSvc,
+			service.NewUserFCMTokenSvc,
 
 			// Handlers
 			handler.NewNotificationHandler,
 			handler.NewPushTopicHandler,
+			handler.NewUserFCMTokenHandler,
 
 			// gRPC server (NotiInternal: notification management)
 			grpcserver.NewNotiInternalServer,

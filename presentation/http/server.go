@@ -26,6 +26,7 @@ func NewHttpServer(
 	logger logger.ILogger,
 	notificationHandler *handler.NotificationHandler,
 	pushTopicHandler *handler.PushTopicHandler,
+	userFCMTokenHandler *handler.UserFCMTokenHandler,
 ) *HttpServer {
 	e := echo.New()
 	e.HideBanner = true
@@ -84,6 +85,7 @@ func NewHttpServer(
 
 	notificationHandler.RegisterRoutes(v1.Group("/notifications"))
 	pushTopicHandler.RegisterRoutes(v1.Group("/push-topics"))
+	userFCMTokenHandler.RegisterRoutes(v1.Group("/fcm-tokens"))
 
 	return &HttpServer{
 		config: *config,
