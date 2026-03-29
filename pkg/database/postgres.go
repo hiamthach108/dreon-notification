@@ -78,6 +78,7 @@ func autoMigration(db *gorm.DB, logger logger.ILogger) error {
 	if err := db.AutoMigrate(
 		&model.Notification{},
 		&model.PushTopic{},
+		&model.Mailbox{},
 	); err != nil {
 		logger.Error("Failed to auto migrate database", "error", err)
 		return err

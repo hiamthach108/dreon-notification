@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill-amqp/v3/pkg/amqp"
@@ -37,6 +38,7 @@ type INotificationSvc interface {
 type NotificationSvc struct {
 	logger        logger.ILogger
 	repo          repository.INotificationRepository
+	mailboxRepo   repository.IMailboxRepository
 	publisher     *amqp.Publisher
 	emailClient   email.IEmailClient
 	renderer      email.IRenderer
@@ -52,6 +54,7 @@ type NotificationSvc struct {
 func NewNotificationSvc(
 	logger logger.ILogger,
 	repo repository.INotificationRepository,
+	mailboxRepo repository.IMailboxRepository,
 	publisher *amqp.Publisher,
 	emailClient email.IEmailClient,
 	renderer email.IRenderer,
@@ -64,6 +67,7 @@ func NewNotificationSvc(
 	return &NotificationSvc{
 		logger:        logger,
 		repo:          repo,
+		mailboxRepo:   mailboxRepo,
 		publisher:     publisher,
 		emailClient:   emailClient,
 		renderer:      renderer,
@@ -143,6 +147,7 @@ func (s *NotificationSvc) ProcessNotificationFromQueue(msg *message.Message) err
 		s.logger.Error("invalid queue payload, message committed", "message_uuid", msg.UUID, "error", err)
 		return nil
 	}
+	payload.Req.NotificationID = payload.NotificationID
 	err := s.SendNotification(ctx, &payload.Req)
 	if err != nil {
 		initial, max := s.backoffParams()
@@ -306,21 +311,6 @@ func (s *NotificationSvc) ProcessNotificationRetryFromQueue(msg *message.Message
 	return nil
 }
 
-func (s *NotificationSvc) backoffParams() (initialSec, maxSec int) {
-	initialSec = s.cfg.Notification.RetryBackoffInitialSec
-	if initialSec <= 0 {
-		initialSec = 30
-	}
-	maxSec = s.cfg.Notification.RetryBackoffMaxSec
-	if maxSec <= 0 {
-		maxSec = 3600
-	}
-	if maxSec < initialSec {
-		maxSec = initialSec
-	}
-	return initialSec, maxSec
-}
-
 func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.SendNotificationReq) error {
 	switch req.Channel {
 	case string(model.NotificationChannelEmail):
@@ -334,6 +324,21 @@ func (s *NotificationSvc) SendNotification(ctx context.Context, req *aggregate.S
 	default:
 		return errorx.New(errorx.ErrInternal, fmt.Sprintf("unsupported channel: %s", req.Channel))
 	}
+}
+
+func (s *NotificationSvc) backoffParams() (initialSec, maxSec int) {
+	initialSec = s.cfg.Notification.RetryBackoffInitialSec
+	if initialSec <= 0 {
+		initialSec = 30
+	}
+	maxSec = s.cfg.Notification.RetryBackoffMaxSec
+	if maxSec <= 0 {
+		maxSec = 3600
+	}
+	if maxSec < initialSec {
+		maxSec = initialSec
+	}
+	return initialSec, maxSec
 }
 
 func (s *NotificationSvc) publishLease() time.Duration {
@@ -439,5 +444,47 @@ func (s *NotificationSvc) sendPush(ctx context.Context, req *aggregate.SendNotif
 }
 
 func (s *NotificationSvc) sendInApp(ctx context.Context, req *aggregate.SendNotificationReq) error {
-	return errorx.New(errorx.ErrInternal, "IN_APP channel not implemented")
+	if s.mailboxRepo == nil {
+		return errorx.New(errorx.ErrInternal, "mailbox repository not configured")
+	}
+	if req.Type == string(model.NotificationTypeMessagingGroup) {
+		return errorx.New(errorx.ErrInternal, "MESSAGING_GROUP is not supported for IN_APP; recipients must be user IDs")
+	}
+	if req.NotificationID == "" {
+		return errorx.New(errorx.ErrInternal, "notification id is required for IN_APP delivery")
+	}
+	if len(req.Recipients) == 0 {
+		return errorx.New(errorx.ErrBadRequest, "at least one recipient user id is required")
+	}
+	if s.repo.FindOneById(ctx, req.NotificationID) == nil {
+		return errorx.New(errorx.ErrInternal, "notification not found for IN_APP delivery")
+	}
+
+	seen := make(map[string]struct{}, len(req.Recipients))
+	mailboxes := make([]model.Mailbox, 0, len(req.Recipients))
+	for _, raw := range req.Recipients {
+		userID := strings.TrimSpace(raw)
+		if userID == "" {
+			continue
+		}
+		if _, dup := seen[userID]; dup {
+			continue
+		}
+		seen[userID] = struct{}{}
+		m := model.Mailbox{
+			Title:          req.Title,
+			Message:        req.Message,
+			NotificationID: req.NotificationID,
+		}
+		m.CreatedBy = userID
+		mailboxes = append(mailboxes, m)
+	}
+	if len(mailboxes) == 0 {
+		return errorx.New(errorx.ErrBadRequest, "no valid recipient user ids")
+	}
+	if err := s.mailboxRepo.BulkCreate(ctx, mailboxes); err != nil {
+		return errorx.Wrap(errorx.ErrInternal, fmt.Errorf("create in-app mailbox rows: %w", err))
+	}
+	s.logger.Info("in-app mailboxes created", "notification_id", req.NotificationID, "recipient_count", len(mailboxes))
+	return nil
 }

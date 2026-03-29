@@ -60,7 +60,7 @@ func openSQLiteNotificationDB(t *testing.T) (*gorm.DB, repository.INotificationR
 	dsn := "file:" + memName + "?mode=memory&cache=shared"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Notification{}))
+	require.NoError(t, db.AutoMigrate(&model.Notification{}, &model.Mailbox{}))
 	return db, repository.NewNotificationRepository(db)
 }
 
@@ -72,7 +72,7 @@ func newNotificationSvc(
 	cfg *config.AppConfig,
 ) INotificationSvc {
 	t.Helper()
-	return newNotificationSvcWithCache(t, repo, pub, noopCache{}, emailClient, nil, cfg)
+	return newNotificationSvcWithCache(t, repo, pub, noopCache{}, emailClient, nil, cfg, nil)
 }
 
 func newNotificationSvcWithCache(
@@ -83,6 +83,7 @@ func newNotificationSvcWithCache(
 	emailClient email.IEmailClient,
 	fcmClient fcm.IFCMClient,
 	cfg *config.AppConfig,
+	mailboxRepo repository.IMailboxRepository,
 ) INotificationSvc {
 	t.Helper()
 	if cfg == nil {
@@ -94,6 +95,7 @@ func newNotificationSvcWithCache(
 	return NewNotificationSvc(
 		testLogger(t, cfg),
 		repo,
+		mailboxRepo,
 		pub,
 		emailClient,
 		email.NewRenderer(cfg),
@@ -422,13 +424,13 @@ func TestNotificationSvc_SendNotification_ChannelRouting(t *testing.T) {
 			wantErr: "FCM client not configured",
 		},
 		{
-			name: "IN_APP_not_implemented",
+			name: "IN_APP_requires_mailbox_repo",
 			req: &aggregate.SendNotificationReq{
 				Channel:    string(model.NotificationChannelInApp),
 				Title:      "In-app",
 				Recipients: []string{"user-id"},
 			},
-			wantErr: "not implemented",
+			wantErr: "mailbox repository not configured",
 		},
 	}
 
@@ -446,7 +448,7 @@ func TestNotificationSvc_SendNotification_Push_MessagingGroup_UsesTopics(t *test
 	ctx := context.Background()
 	cfg := testEmailConfig(t)
 	mockFCM := &mockFCMClient{}
-	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, nil, noopCache{}, &mockEmailClient{}, mockFCM, cfg)
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, nil, noopCache{}, &mockEmailClient{}, mockFCM, cfg, nil)
 
 	req := &aggregate.SendNotificationReq{
 		IdempotencyKey: "idem-push-group",
@@ -471,7 +473,7 @@ func TestNotificationSvc_SendNotification_Push_NonGroup_UsesTokens(t *testing.T)
 	ctx := context.Background()
 	cfg := testEmailConfig(t)
 	mockFCM := &mockFCMClient{}
-	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, nil, noopCache{}, &mockEmailClient{}, mockFCM, cfg)
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, nil, noopCache{}, &mockEmailClient{}, mockFCM, cfg, nil)
 
 	req := &aggregate.SendNotificationReq{
 		IdempotencyKey: "idem-push-tok",
@@ -500,6 +502,53 @@ func TestNotificationSvc_SendNotification_Email_MessagingGroup_Rejected(t *testi
 	err := svc.SendNotification(ctx, req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "MESSAGING_GROUP")
+}
+
+func TestNotificationSvc_SendNotification_InApp_CreatesMailboxes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cfg := testEmailConfig(t)
+	db, notifRepo := openSQLiteNotificationDB(t)
+	mailRepo := repository.NewMailboxRepository(db)
+
+	userA := "22222222-2222-6222-8222-222222222222"
+	userB := "33333333-3333-6333-8333-333333333333"
+	n := &model.Notification{
+		IdempotencyKey: "idem-inapp-1",
+		Source:         "test",
+		Channel:        model.NotificationChannelInApp,
+		Type:           model.NotificationTypeWelcome,
+		Status:         model.NotificationStatusPending,
+		Title:          "Inbox item",
+		Message:        "You have a new message",
+		Recipients:     []string{userA, userB, userA},
+		Provider:       model.NotificationProviderFirebase,
+		MaxAttempts:    3,
+	}
+	created, err := notifRepo.Create(ctx, n)
+	require.NoError(t, err)
+	require.NotEmpty(t, created.ID)
+
+	svc := newNotificationSvcWithCache(t, notifRepo, nil, noopCache{}, &mockEmailClient{}, nil, cfg, mailRepo)
+	req := &aggregate.SendNotificationReq{
+		IdempotencyKey: n.IdempotencyKey,
+		Source:         n.Source,
+		Channel:        string(n.Channel),
+		Type:           string(n.Type),
+		Title:          n.Title,
+		Message:        n.Message,
+		Recipients:     []string{userA, userB, userA},
+		NotificationID: created.ID,
+	}
+	require.NoError(t, svc.SendNotification(ctx, req))
+
+	var count int64
+	require.NoError(t, db.Model(&model.Mailbox{}).Where("notification_id = ?", created.ID).Count(&count).Error)
+	assert.Equal(t, int64(2), count)
+
+	var forA int64
+	require.NoError(t, db.Model(&model.Mailbox{}).Where("notification_id = ? AND created_by = ?", created.ID, userA).Count(&forA).Error)
+	assert.Equal(t, int64(1), forA)
 }
 
 // --- EnqueueNotification ---
@@ -604,7 +653,7 @@ func TestNotificationSvc_EnqueueDueScheduledNotifications_ErrWithoutCache(t *tes
 	var nilCache cache.ICache
 	// Non-nil publisher pointer is required so the service reaches the cache check.
 	pub := new(amqp.Publisher)
-	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, pub, nilCache, nil, nil, testEmailConfig(t))
+	svc := newNotificationSvcWithCache(t, &mockNotificationRepo{}, pub, nilCache, nil, nil, testEmailConfig(t), nil)
 	require.Error(t, svc.EnqueueDueScheduledNotifications(ctx, 5))
 }
 
@@ -618,7 +667,7 @@ func TestNotificationSvc_EnqueueDueScheduledNotifications_SetNXSkipsWhenKeyExist
 	}}
 	seqCache := &seqBoolCache{results: []bool{false}}
 	pub := new(amqp.Publisher)
-	svc := newNotificationSvcWithCache(t, repo, pub, seqCache, nil, nil, cfg)
+	svc := newNotificationSvcWithCache(t, repo, pub, seqCache, nil, nil, cfg, nil)
 	require.NoError(t, svc.EnqueueDueScheduledNotifications(ctx, 10))
 	assert.Equal(t, 1, seqCache.i, "SetNX should run once per row")
 }

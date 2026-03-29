@@ -18,6 +18,8 @@ type SendNotificationReq struct {
 	Params         map[string]any `json:"params"`
 	ScheduledAt    *time.Time     `json:"scheduledAt" validate:"omitempty"`
 	ExpiredAt      *time.Time     `json:"expiredAt" validate:"omitempty"`
+	// NotificationID is the persisted notifications row ID; set by the queue consumer / FromModel, required for IN_APP.
+	NotificationID string `json:"notificationId,omitempty" validate:"omitempty,uuid"`
 }
 
 func (req *SendNotificationReq) ToModel() *model.Notification {
@@ -49,6 +51,7 @@ func (req *SendNotificationReq) FromModel(m *model.Notification) {
 	req.Source = m.Source
 	req.Channel = string(m.Channel)
 	req.Type = string(m.Type)
+	req.NotificationID = m.ID
 	req.Title = m.Title
 	req.Message = m.Message
 	req.Recipients = append([]string(nil), m.Recipients...)

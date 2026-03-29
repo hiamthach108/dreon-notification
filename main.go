@@ -45,10 +45,12 @@ func main() {
 			// Repositories
 			repository.NewNotificationRepository,
 			repository.NewPushTopicRepository,
+			repository.NewMailboxRepository,
 
 			// Services
 			service.NewNotificationSvc,
 			service.NewPushTopicSvc,
+			service.NewMailboxSvc,
 
 			// Handlers
 			handler.NewNotificationHandler,
