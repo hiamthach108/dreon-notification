@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/hiamthach108/dreon-notification/internal/aggregate"
-	"github.com/hiamthach108/dreon-notification/internal/errorx"
 	"github.com/hiamthach108/dreon-notification/internal/model"
 	"github.com/hiamthach108/dreon-notification/internal/repository"
+	"github.com/hiamthach108/dreon-sdk/errorx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"

@@ -8,13 +8,13 @@ import (
 	"github.com/hiamthach108/dreon-notification/pkg/database"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/fcm"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
 	"github.com/hiamthach108/dreon-notification/presentation/events"
 	grpcserver "github.com/hiamthach108/dreon-notification/presentation/grpc"
 	"github.com/hiamthach108/dreon-notification/presentation/http"
 	"github.com/hiamthach108/dreon-notification/presentation/http/handler"
 	"github.com/hiamthach108/dreon-notification/presentation/worker"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
@@ -27,7 +27,7 @@ func main() {
 		fx.Provide(
 			// Core
 			config.NewAppConfig,
-			logger.NewLogger,
+			newAppLogger,
 			cache.NewAppCache,
 			database.NewDbClient,
 			http.NewHttpServer,
@@ -71,4 +71,11 @@ func main() {
 	)
 
 	app.Run()
+}
+
+func newAppLogger(config *config.AppConfig) (logger.ILogger, error) {
+	return logger.NewLogger(logger.Config{
+		Service: config.App.Name,
+		Level:   config.Logger.Level,
+	})
 }

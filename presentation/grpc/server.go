@@ -7,10 +7,10 @@ import (
 
 	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/hiamthach108/dreon-notification/internal/aggregate"
-	"github.com/hiamthach108/dreon-notification/internal/errorx"
 	"github.com/hiamthach108/dreon-notification/internal/service"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
-	notiinternal "github.com/hiamthach108/dreon-notification/presentation/grpc/gen/proto"
+	notiinternal "github.com/hiamthach108/dreon-sdk/contracts/notification/v1"
+	"github.com/hiamthach108/dreon-sdk/errorx"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"go.uber.org/fx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

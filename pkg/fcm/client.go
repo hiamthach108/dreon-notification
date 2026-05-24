@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/hiamthach108/dreon-notification/config"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"

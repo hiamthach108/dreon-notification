@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/hiamthach108/dreon-notification/internal/aggregate"
-	"github.com/hiamthach108/dreon-notification/internal/errorx"
 	"github.com/hiamthach108/dreon-notification/internal/model"
 	"github.com/hiamthach108/dreon-notification/internal/repository"
 	"github.com/hiamthach108/dreon-notification/pkg/validator"
+	"github.com/hiamthach108/dreon-sdk/errorx"
 )
 
 type IPushTopicSvc interface {

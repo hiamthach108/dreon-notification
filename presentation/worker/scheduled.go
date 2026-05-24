@@ -6,7 +6,7 @@ import (
 
 	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/hiamthach108/dreon-notification/internal/service"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"go.uber.org/fx"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/hiamthach108/dreon-notification/config"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 
 	"github.com/resend/resend-go/v3"
 )

@@ -2,7 +2,7 @@ package events
 
 import (
 	"github.com/ThreeDotsLabs/watermill"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 )
 
 // zapLoggerAdapter adapts logger.ILogger to watermill.LoggerAdapter.

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/hiamthach108/dreon-notification/config"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"github.com/redis/go-redis/v9"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hiamthach108/dreon-notification/config"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	twilio "github.com/twilio/twilio-go"
 	openapi "github.com/twilio/twilio-go/rest/api/v2010"
 )

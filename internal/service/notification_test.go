@@ -19,8 +19,8 @@ import (
 	"github.com/hiamthach108/dreon-notification/pkg/cache"
 	"github.com/hiamthach108/dreon-notification/pkg/email"
 	"github.com/hiamthach108/dreon-notification/pkg/fcm"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/sms"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -48,7 +48,10 @@ func testEmailConfig(t *testing.T) *config.AppConfig {
 
 func testLogger(t *testing.T, cfg *config.AppConfig) logger.ILogger {
 	t.Helper()
-	log, err := logger.NewLogger(cfg)
+	log, err := logger.NewLogger(logger.Config{
+		Service: cfg.App.Name,
+		Level:   cfg.Logger.Level,
+	})
 	require.NoError(t, err)
 	return log
 }

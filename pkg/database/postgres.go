@@ -5,7 +5,7 @@ import (
 
 	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/hiamthach108/dreon-notification/internal/model"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

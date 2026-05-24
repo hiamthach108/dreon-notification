@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/hiamthach108/dreon-notification/internal/errorx"
+	"github.com/hiamthach108/dreon-sdk/errorx"
 	"github.com/labstack/echo/v4"
 )
 

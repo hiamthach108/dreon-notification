@@ -7,9 +7,9 @@ import (
 
 	"github.com/hiamthach108/dreon-notification/config"
 	"github.com/hiamthach108/dreon-notification/internal/shared/constant"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/validator"
 	"github.com/hiamthach108/dreon-notification/presentation/http/handler"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/fx"

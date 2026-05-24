@@ -3,8 +3,8 @@ package handler
 import (
 	"github.com/hiamthach108/dreon-notification/internal/aggregate"
 	"github.com/hiamthach108/dreon-notification/internal/service"
-	"github.com/hiamthach108/dreon-notification/pkg/logger"
 	"github.com/hiamthach108/dreon-notification/pkg/validator"
+	"github.com/hiamthach108/dreon-sdk/logger"
 	"github.com/labstack/echo/v4"
 )
 
